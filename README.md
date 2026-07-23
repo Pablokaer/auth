@@ -23,14 +23,15 @@ Framework Core 10**, **Cake Frosting** (build/deploy pipeline), **Pulumi (C#)**
 5. [Local execution](#local-execution)
 6. [Ports](#ports)
 7. [Keycloak setup](#keycloak-setup)
-8. [Testing](#testing)
-9. [Database & migrations](#database--migrations)
-10. [Cake build pipeline](#cake-build-pipeline)
-11. [Pulumi infrastructure](#pulumi-infrastructure)
-12. [CI](#ci) · [Deployment](#deployment)
-13. [Why SQLite](#why-sqlite)
-14. [Security](#security)
-15. [Troubleshooting](#troubleshooting)
+8. [Test accounts (local development)](#test-accounts-local-development)
+9. [Testing](#testing)
+10. [Database & migrations](#database--migrations)
+11. [Cake build pipeline](#cake-build-pipeline)
+12. [Pulumi infrastructure](#pulumi-infrastructure)
+13. [CI](#ci) · [Deployment](#deployment)
+14. [Why SQLite](#why-sqlite)
+15. [Security](#security)
+16. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -125,6 +126,19 @@ Non-secret settings live in `src/CentralLogin.Web/appsettings*.json`
 supply secrets via environment variables or your cloud secret manager.
 
 ## Local execution
+
+> **TL;DR — day-to-day run.** Once the Keycloak + PostgreSQL containers exist and
+> are up (`docker start centrallogin-postgres centrallogin-keycloak`), starting
+> the app is a single command:
+>
+> ```zsh
+> dotnet run --project src/CentralLogin.Web --launch-profile http
+> ```
+>
+> The app is then served at **http://localhost:5080**. Sign in with the
+> [test accounts](#test-accounts-local-development). Full first-time container
+> setup is in [option B](#b-reliable-fallback--containers--the-web-app-directly)
+> below.
 
 > The commands below are shown for macOS/zsh. On **Windows** use PowerShell —
 > the `dotnet` commands are identical; only the shell-specific bits differ
@@ -234,6 +248,43 @@ mounted into the container at `/opt/keycloak/themes` (see the `-v` flag in
 `"loginTheme": "central-login"` entry on the realm). Only colours/styling change;
 edit `keycloak/themes/central-login/login/resources/css/custom.css`. Under
 `start-dev` theme caching is off, so a browser refresh shows edits immediately.
+
+## Test accounts (local development)
+
+> **Local development only.** By design the repository commits **no passwords**
+> (see [Security](#security)). The realm import creates the `dev-admin` user
+> **without** a password, and the Keycloak admin password is whatever you supply
+> via env / user-secrets. So the passwords below are **conventional local-dev
+> values you set yourself** with the commands that follow — they let the next
+> developer sign in immediately. Never reuse them in staging/production.
+
+| Account | Username | Password (local dev) | Roles | Where to use it |
+|---|---|---|---|---|
+| **Keycloak admin** (master realm) | `admin` | `TroqueEstaSenha123!` | — | Admin console: http://localhost:8080/admin |
+| **App test user** (`central-login` realm) | `dev-admin` | `DevAdmin123!` | `user`, `administrator` | The web app: http://localhost:5080 |
+
+`dev-admin` (display name **Dev Admin**, email `dev-admin@example.local`) holds
+both the `user` and `administrator` realm roles, so it can reach the app's
+admin-only pages (`/Admin`).
+
+**Setting these passwords.** The Keycloak `admin` password is set when the
+container first starts (`KC_BOOTSTRAP_ADMIN_PASSWORD`, see
+[Local execution → B](#local-execution) — use `admin` locally). The `dev-admin`
+password is set **after** the realm import by `keycloak/configure-dev.sh`, which
+reads it from the environment:
+
+```zsh
+export KEYCLOAK_URL=http://localhost:8080
+export KEYCLOAK_ADMIN_USERNAME=admin KEYCLOAK_ADMIN_PASSWORD='admin'
+export CENTRALLOGIN_WEB_CLIENT_SECRET='<same secret you set for the web app>'
+export KEYCLOAK_DEV_ADMIN_PASSWORD='dev-admin'      # local-dev convention
+./keycloak/configure-dev.sh
+```
+
+On **Windows/PowerShell** the same, with `$env:` assignments, e.g.
+`$env:KEYCLOAK_DEV_ADMIN_PASSWORD = 'dev-admin'`, then run the script via Git
+Bash / WSL. You can also set the password by hand in the admin console
+(**Users → dev-admin → Credentials → Set password**, turn *Temporary* off).
 
 ## Testing
 
