@@ -1,0 +1,22 @@
+@page
+@model DashboardModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<h1>Dashboard</h1>
+<p>This page requires an authenticated user with the <code>user</code> role.</p>
+
+<div class="card">
+    <h2>Your identity</h2>
+    <dl class="claims">
+        <dt>Subject (sub)</dt>
+        <dd>@Model.Subject</dd>
+        <dt>Name</dt>
+        <dd>@(User.Identity?.Name ?? "—")</dd>
+        <dt>Email</dt>
+        <dd>@(Model.Email ?? "—")</dd>
+        <dt>Roles</dt>
+        <dd>@Model.Roles</dd>
+    </dl>
+</div>

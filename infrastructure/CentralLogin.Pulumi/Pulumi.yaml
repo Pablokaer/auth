@@ -1,0 +1,6 @@
+name: central-login
+runtime: dotnet
+description: >-
+  Provider-neutral infrastructure for CentralLogin. Concrete cloud resources are
+  added at the marked extension points once a provider is selected. Scaffolding
+  deploys no resources by default.

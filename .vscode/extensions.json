@@ -1,0 +1,11 @@
+{
+  "recommendations": [
+    "ms-dotnettools.csdevkit",
+    "ms-dotnettools.csharp",
+    "ms-dotnettools.vscode-dotnet-runtime",
+    "ms-azuretools.vscode-docker",
+    "editorconfig.editorconfig",
+    "pulumi.pulumi-vscode-tools",
+    "redhat.vscode-yaml"
+  ]
+}

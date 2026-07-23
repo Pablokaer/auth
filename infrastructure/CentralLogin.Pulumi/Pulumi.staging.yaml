@@ -1,0 +1,9 @@
+# Staging stack configuration.
+# Non-secret values only. Set secrets with `pulumi config set --secret ...`.
+config:
+  central-login:cloudProvider: azure       # none | azure | aws | gcp | kubernetes
+  central-login:domain: REPLACE_WITH_STAGING_DOMAIN
+  # Azure — supply your own account/region values (not invented here):
+  #   pulumi config set central-login:azureLocation <your-azure-region>
+  #   pulumi config set central-login:azureTenantId <your-azure-tenant-id>
+  #   pulumi config set azure-native:subscriptionId <your-subscription-id>

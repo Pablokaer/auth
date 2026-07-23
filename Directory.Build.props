@@ -1,0 +1,28 @@
+<Project>
+
+  <!--
+    Solution-wide build settings applied to every project.
+    Individual projects can override any of these values.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <InvariantGlobalization>true</InvariantGlobalization>
+
+    <!-- Analyzers on, but warnings do not fail the build by default so the
+         scaffold restores and builds cleanly. CI runs code formatting and
+         package vulnerability checks for stricter gating. -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+
+    <!-- Security / supply-chain hygiene -->
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+    <NuGetAuditMode>direct</NuGetAuditMode>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,36 @@
+# =====================================================================
+# Keycloak PRODUCTION configuration template (keycloak.conf)
+# =====================================================================
+# Copy to keycloak.conf and provide real values via environment variables or
+# your secret manager. This file contains PLACEHOLDERS ONLY — never commit real
+# hostnames, database credentials, or the bootstrap admin password.
+#
+# In production, start Keycloak with `start` (optimized), NEVER `start-dev`.
+# ---------------------------------------------------------------------
+
+# --- Hostname / URLs -------------------------------------------------
+hostname=REPLACE_WITH_KEYCLOAK_PUBLIC_HOSTNAME
+hostname-strict=true
+
+# --- Reverse proxy / TLS termination ---------------------------------
+# Set to the proxy mode used by your ingress/load balancer.
+proxy-headers=xforwarded
+# Terminate TLS at Keycloak or at the proxy. If at Keycloak, provide certs.
+https-certificate-file=REPLACE_OR_MANAGE_VIA_SECRET
+https-certificate-key-file=REPLACE_OR_MANAGE_VIA_SECRET
+
+# --- Database (PostgreSQL) -------------------------------------------
+db=postgres
+db-url=jdbc:postgresql://REPLACE_DB_HOST:5432/keycloak
+db-username=${KC_DB_USERNAME}
+db-password=${KC_DB_PASSWORD}
+
+# --- Health & metrics endpoints --------------------------------------
+health-enabled=true
+metrics-enabled=true
+
+# --- Bootstrap administration (first start only) ---------------------
+# Provide via environment, NOT in this file:
+#   KC_BOOTSTRAP_ADMIN_USERNAME
+#   KC_BOOTSTRAP_ADMIN_PASSWORD
+# Rotate/remove after creating a permanent administrative account.

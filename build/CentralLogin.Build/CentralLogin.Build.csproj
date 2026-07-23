@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Cake Frosting build/deploy pipeline (strongly typed C# tasks).
+    Run with:  dotnet run (see README) then pass a Target and arguments.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>CentralLogin.Build</RootNamespace>
+    <AssemblyName>CentralLogin.Build</AssemblyName>
+    <!-- The build project is a tool, not shipped product code. -->
+    <IsPackable>false</IsPackable>
+    <RunAnalyzers>false</RunAnalyzers>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Cake.Frosting" />
+  </ItemGroup>
+
+</Project>

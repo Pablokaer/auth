@@ -1,0 +1,53 @@
+name: CD
+
+# Separate from CI. Manual dispatch only — never runs for pull requests, so
+# untrusted PRs can never trigger a Pulumi deployment.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [staging, production]
+        required: true
+
+permissions:
+  contents: read
+  id-token: write # cloud OIDC federation (no long-lived cloud keys)
+
+concurrency:
+  group: cd-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # GitHub Environment provides protection rules; configure the `production`
+    # environment with required reviewers to enforce manual approval.
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pinned .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v6
+
+      - name: Restore local tools
+        run: dotnet tool restore
+
+      - name: Deploy to Staging (Cake CD)
+        if: inputs.environment == 'staging'
+        run: dotnet run --project build/CentralLogin.Build --configuration Release -- --target=CD --environment=Staging
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
+      - name: Deploy to Production (Cake CD)
+        if: inputs.environment == 'production'
+        run: dotnet run --project build/CentralLogin.Build --configuration Release -- --target=CD --environment=Production --confirm-production=true
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}

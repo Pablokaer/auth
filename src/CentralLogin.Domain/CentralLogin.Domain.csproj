@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Domain layer.
+    Pure .NET. MUST NOT reference ASP.NET Core, EF Core, Keycloak, Aspire,
+    Cake or Pulumi. This isolation is enforced by the architecture tests.
+  -->
+  <PropertyGroup>
+    <RootNamespace>CentralLogin.Domain</RootNamespace>
+    <AssemblyName>CentralLogin.Domain</AssemblyName>
+  </PropertyGroup>
+
+</Project>

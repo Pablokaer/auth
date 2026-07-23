@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Application layer.
+    Use cases, service interfaces, commands/queries, validation and
+    application-level authorization rules. Depends on Domain only.
+    MUST NOT reference EF Core, ASP.NET Core, Keycloak or Aspire.
+  -->
+  <PropertyGroup>
+    <RootNamespace>CentralLogin.Application</RootNamespace>
+    <AssemblyName>CentralLogin.Application</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CentralLogin.Domain\CentralLogin.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>CentralLogin.IntegrationTests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CentralLogin.Domain\CentralLogin.Domain.csproj" />
+    <ProjectReference Include="..\..\src\CentralLogin.Application\CentralLogin.Application.csproj" />
+    <ProjectReference Include="..\..\src\CentralLogin.Infrastructure\CentralLogin.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\CentralLogin.Web\CentralLogin.Web.csproj" />
+  </ItemGroup>
+
+  <!-- Optional end-to-end profile (runs against the local Aspire environment).
+       Enabled with:  dotnet test -p:E2E=true
+       Kept out of the default test run so CI does not require Docker/Keycloak. -->
+  <ItemGroup Condition="'$(E2E)' == 'true'">
+    <PackageReference Include="Aspire.Hosting.Testing" />
+    <ProjectReference Include="..\..\src\CentralLogin.AppHost\CentralLogin.AppHost.csproj" />
+  </ItemGroup>
+  <PropertyGroup Condition="'$(E2E)' == 'true'">
+    <DefineConstants>$(DefineConstants);E2E</DefineConstants>
+  </PropertyGroup>
+
+</Project>

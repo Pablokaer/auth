@@ -1,0 +1,14 @@
+@page
+@model CentralLogin.Web.Pages.Account.LoginModel
+@{
+    ViewData["Title"] = "Sign in";
+}
+
+<div class="auth-shell">
+    <div class="auth-card">
+        <div class="spinner" role="status" aria-label="Loading"></div>
+        <h1>Signing you in…</h1>
+        <p>Redirecting to Keycloak. If nothing happens,
+           <a asp-page="/Account/Login">try again</a>.</p>
+    </div>
+</div>

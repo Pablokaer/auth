@@ -1,0 +1,41 @@
+@using System.Security.Claims
+@using CentralLogin.Application.Authorization
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - CentralLogin</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+    <div class="page">
+        <header class="nav">
+            <nav class="nav-inner">
+                <a class="brand" asp-page="/Index"><span class="brand-mark">CL</span> CentralLogin</a>
+                <a class="nav-link" asp-page="/Dashboard">Dashboard</a>
+                @if (User.IsInRole(ApplicationRoles.Administrator))
+                {
+                    <a class="nav-link" asp-page="/Admin">Admin</a>
+                }
+                <span class="spacer"></span>
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <span class="user">@User.Identity!.Name</span>
+                    <a class="nav-link" asp-page="/Account/Logout">Sign out</a>
+                }
+                else
+                {
+                    <a class="btn btn-sm" asp-page="/Account/Login">Sign in</a>
+                }
+            </nav>
+        </header>
+        <main class="container">
+            @RenderBody()
+        </main>
+        <footer class="footer">
+            <small>CentralLogin &middot; authentication via Keycloak</small>
+        </footer>
+    </div>
+</body>
+</html>

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    Web application (ASP.NET Core Razor Pages).
+    Cookie + OpenID Connect authentication, authorization policies, login/
+    logout, protected pages, security headers, CSP and rate limiting.
+    The OpenID Connect and cookie handlers ship in the ASP.NET Core shared
+    framework (Microsoft.AspNetCore.App), so no auth NuGet package is needed.
+  -->
+  <PropertyGroup>
+    <RootNamespace>CentralLogin.Web</RootNamespace>
+    <AssemblyName>CentralLogin.Web</AssemblyName>
+    <UserSecretsId>centrallogin-web</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CentralLogin.Application\CentralLogin.Application.csproj" />
+    <ProjectReference Include="..\CentralLogin.Infrastructure\CentralLogin.Infrastructure.csproj" />
+    <ProjectReference Include="..\CentralLogin.ServiceDefaults\CentralLogin.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+</Project>

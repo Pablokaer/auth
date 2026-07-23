@@ -1,0 +1,100 @@
+﻿{
+    "realm":  "central-login",
+    "enabled":  true,
+    "displayName":  "CentralLogin",
+    "sslRequired":  "external",
+    "registrationAllowed":  false,
+    "resetPasswordAllowed":  true,
+    "loginWithEmailAllowed":  true,
+    "duplicateEmailsAllowed":  false,
+    "bruteForceProtected":  true,
+    "roles":  {
+                  "realm":  [
+                                {
+                                    "name":  "user",
+                                    "description":  "Standard application user"
+                                },
+                                {
+                                    "name":  "administrator",
+                                    "description":  "Application administrator"
+                                }
+                            ]
+              },
+    "defaultRoles":  [
+                         "user"
+                     ],
+    "clients":  [
+                    {
+                        "clientId":  "central-login-web",
+                        "name":  "CentralLogin Web",
+                        "description":  "Confidential OIDC client for the CentralLogin Razor Pages app.",
+                        "enabled":  true,
+                        "protocol":  "openid-connect",
+                        "publicClient":  false,
+                        "standardFlowEnabled":  true,
+                        "implicitFlowEnabled":  false,
+                        "directAccessGrantsEnabled":  false,
+                        "serviceAccountsEnabled":  false,
+                        "frontchannelLogout":  true,
+                        "attributes":  {
+                                           "pkce.code.challenge.method":  "S256",
+                                           "post.logout.redirect.uris":  "http://localhost:5080/signout-callback-oidc##https://localhost:7080/signout-callback-oidc##https://REPLACE_WITH_APP_HOST/signout-callback-oidc"
+                                       },
+                        "redirectUris":  [
+                                             "http://localhost:5080/signin-oidc",
+                                             "https://localhost:7080/signin-oidc",
+                                             "https://REPLACE_WITH_APP_HOST/signin-oidc"
+                                         ],
+                        "webOrigins":  [
+                                           "http://localhost:5080",
+                                           "https://localhost:7080",
+                                           "https://REPLACE_WITH_APP_HOST"
+                                       ],
+                        "protocolMappers":  [
+                                                {
+                                                    "name":  "realm roles",
+                                                    "protocol":  "openid-connect",
+                                                    "protocolMapper":  "oidc-usermodel-realm-role-mapper",
+                                                    "consentRequired":  false,
+                                                    "config":  {
+                                                                   "claim.name":  "realm_access.roles",
+                                                                   "jsonType.label":  "String",
+                                                                   "multivalued":  "true",
+                                                                   "id.token.claim":  "true",
+                                                                   "access.token.claim":  "true",
+                                                                   "userinfo.token.claim":  "true"
+                                                               }
+                                                },
+                                                {
+                                                    "name":  "client roles",
+                                                    "protocol":  "openid-connect",
+                                                    "protocolMapper":  "oidc-usermodel-client-role-mapper",
+                                                    "consentRequired":  false,
+                                                    "config":  {
+                                                                   "usermodel.clientRoleMapping.clientId":  "central-login-web",
+                                                                   "claim.name":  "resource_access.central-login-web.roles",
+                                                                   "jsonType.label":  "String",
+                                                                   "multivalued":  "true",
+                                                                   "id.token.claim":  "true",
+                                                                   "access.token.claim":  "true",
+                                                                   "userinfo.token.claim":  "true"
+                                                               }
+                                                }
+                                            ]
+                    }
+                ],
+    "users":  [
+                  {
+                      "username":  "dev-admin",
+                      "enabled":  true,
+                      "emailVerified":  true,
+                      "email":  "dev-admin@example.local",
+                      "firstName":  "Dev",
+                      "lastName":  "Admin",
+                      "realmRoles":  [
+                                         "user",
+                                         "administrator"
+                                     ]
+                  }
+              ]
+}

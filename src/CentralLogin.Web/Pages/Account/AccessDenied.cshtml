@@ -1,0 +1,14 @@
+@page
+@model CentralLogin.Web.Pages.Account.AccessDeniedModel
+@{
+    ViewData["Title"] = "Access denied";
+}
+
+<div class="auth-shell">
+    <div class="auth-card">
+        <div class="icon-badge">&#9888;</div>
+        <h1>Access denied</h1>
+        <p>You are signed in but do not have permission to view this resource.</p>
+        <p class="actions-center"><a class="btn on-card" asp-page="/Index">Return home</a></p>
+    </div>
+</div>

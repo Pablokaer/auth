@@ -1,0 +1,364 @@
+/* =====================================================================
+   CentralLogin — application theme
+   Visual design system: clean, minimal Microsoft Fluent-inspired
+   enterprise SaaS. White surfaces, Deep Teal primary, high-contrast
+   neutral typography, soft shadows and rounded components.
+
+   All styling is served from 'self' to comply with the strict CSP
+   (style-src 'self'; font-src 'self'; img-src 'self' data:). No inline
+   styles, no external fonts, no CDNs. "Inter" is requested as the primary
+   typeface; because external fonts are blocked by the CSP it is used only
+   when installed locally, falling back to Segoe UI / system-ui (Fluent's
+   native stack on Windows). Bundle Inter under wwwroot to guarantee it.
+   ===================================================================== */
+
+:root {
+    /* Brand */
+    --accent: #0F5C6E;          /* primary — Deep Teal */
+    --accent-strong: #0C4C5A;   /* primary hover */
+    --accent-soft: #DDF3F5;     /* secondary accent — Soft Cyan */
+
+    /* Surfaces */
+    --bg: #FFFFFF;              /* main background */
+    --section-bg: #F8F9FB;     /* section background */
+    --card-bg: #FFFFFF;
+
+    /* Text */
+    --fg: #111827;             /* primary text */
+    --muted: #6B7280;          /* secondary text */
+    --text-muted: #9CA3AF;     /* muted text */
+
+    /* Lines */
+    --border: #E5E7EB;
+
+    /* Shape */
+    --radius: 18px;            /* cards (16–20px) */
+    --radius-btn: 10px;        /* buttons / inputs */
+
+    /* Elevation — soft, subtle */
+    --shadow: 0 1px 3px rgba(17, 24, 39, 0.06), 0 8px 24px rgba(17, 24, 39, 0.04);
+    --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.06);
+    --shadow-btn: 0 1px 2px rgba(17, 24, 39, 0.10), 0 2px 8px rgba(15, 92, 110, 0.16);
+    --ring: 0 0 0 3px rgba(15, 92, 110, 0.22);   /* teal focus ring */
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+    margin: 0;
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    font-weight: 400;
+    line-height: 1.6;
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* --- Page scaffold: sticky footer via flex column ---------------------- */
+.page {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* --- Top navigation (white bar with a thin bottom border) -------------- */
+.nav {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+}
+
+.nav-inner {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0.85rem 1.5rem;
+}
+
+.brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--fg);
+    text-decoration: none;
+    letter-spacing: 0.2px;
+}
+
+.brand-mark {
+    display: inline-grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 800;
+    box-shadow: var(--shadow-sm);
+}
+
+.nav-link {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.95rem;
+    font-weight: 500;
+    padding: 0.35rem 0.2rem;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+.nav-link:hover { color: var(--fg); border-bottom-color: var(--accent); }
+
+.nav .spacer { flex: 1; }
+.nav .user {
+    color: var(--muted);
+    font-size: 0.9rem;
+    font-weight: 500;
+    padding: 0.2rem 0.65rem;
+    border-radius: 999px;
+    background: var(--section-bg);
+    border: 1px solid var(--border);
+}
+
+/* --- Main content container ------------------------------------------- */
+.container {
+    width: 100%;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem;
+    flex: 1;
+}
+
+/* --- Hero (home landing) ---------------------------------------------- */
+.hero {
+    text-align: left;
+    color: var(--fg);
+    padding: 2rem 1rem 2.5rem;
+    
+}
+.hero h1 {
+    line-height: 1; 
+    font-size: clamp(2.5rem, 5vw, 3rem);
+    margin: 0 0 1.25rem;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--fg);
+}
+.hero .lead {
+    text-align: left;
+    font-size: 1.15rem;
+    font-weight: 400;
+    max-width: 640px;
+    margin: 0 0 2rem;
+    color: var(--muted);
+}
+.hero .actions { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; }
+
+/* Hero with an image beside the copy */
+.hero-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2.5rem;
+    flex-wrap: wrap;
+    text-align: left;
+}
+.hero-row .hero-copy { flex: 1 1 340px; max-width: 560px; }
+.hero-row .hero-copy .lead { margin-left: 0; margin-right: 0; }
+.hero-img {
+    flex: 0 1 460px;
+    width: 100%;
+    max-width: 460px;
+    height: auto;
+    padding: 8px;
+    border-radius: 28px;
+    background: linear-gradient( 180deg, #f9fcfd 0%, #eef6fa 100% );
+    border: 2px solid #dbe8ef;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 32px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 0 0 2px rgba(220, 234, 242, 0.7);
+}
+@media (max-width: 640px) {
+    .hero-row { text-align: center; }
+    .hero-row .hero-copy .lead { margin-left: auto; margin-right: auto; }
+}
+
+/* Page-level headings and intro text on the white surface use the
+   neutral high-contrast palette. Text inside .card stays dark too. */
+.container > h1 {
+    color: var(--fg);
+    font-size: clamp(1.6rem, 3vw, 2.1rem);
+    font-weight: 700;
+    margin: 0.25rem 0 0.9rem;
+    letter-spacing: -0.3px;
+}
+.container > p { color: var(--muted); max-width: 720px; }
+.container > p a { color: var(--accent); text-decoration: underline; }
+.container > p code { background: var(--section-bg); color: var(--fg); }
+
+/* --- Cards (white panels with a thin border) -------------------------- */
+.card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem 1.75rem;
+    margin: 1.25rem 0;
+    box-shadow: var(--shadow);
+}
+.card h2 { margin-top: 0; margin-bottom: 0.9rem; font-weight: 700; color: var(--fg); }
+
+/* --- Feature grid on the landing page --------------------------------- */
+.features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.25rem;
+    margin-top: 1.5rem;
+}
+.feature {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    box-shadow: var(--shadow);
+}
+.feature .icon {
+    display: inline-grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 1.3rem;
+    margin-bottom: 1rem;
+}
+.feature h3 { margin: 0 0 0.5rem; font-size: 1.05rem; font-weight: 700; color: var(--fg); }
+.feature p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+
+/* --- Buttons ---------------------------------------------------------- */
+.btn {
+    display: inline-block;
+    padding: 0.7rem 1.4rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius-btn);
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.05s ease;
+    box-shadow: var(--shadow-btn);
+}
+.btn:hover { background: var(--accent-strong); box-shadow: var(--shadow); }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { outline: none; box-shadow: var(--ring); }
+
+.btn.secondary {
+    background: var(--bg);
+    color: var(--fg);
+    border-color: var(--border);
+    box-shadow: none;
+}
+.btn.secondary:hover { background: var(--section-bg); box-shadow: none; }
+
+.btn.on-card { }
+.btn.on-card.secondary { background: var(--bg); color: var(--fg); border-color: var(--border); }
+.btn.on-card.secondary:hover { background: var(--section-bg); }
+
+.btn-sm { padding: 0.45rem 1rem; font-size: 0.9rem; border-radius: 8px; }
+
+/* --- Inputs ----------------------------------------------------------- */
+input, select, textarea {
+    font: inherit;
+    color: var(--fg);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-btn);
+    padding: 0.6rem 0.8rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+input::placeholder, textarea::placeholder { color: var(--text-muted); }
+input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: var(--ring);
+}
+
+/* --- Identity / claims list on the dashboard -------------------------- */
+dl.claims { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 0.4rem 1.25rem; }
+dl.claims dt { font-weight: 600; color: var(--fg); }
+dl.claims dd { margin: 0; color: var(--muted); word-break: break-word; }
+
+code {
+    background: var(--section-bg);
+    border: 1px solid var(--border);
+    padding: 0.1rem 0.35rem;
+    border-radius: 6px;
+    font-size: 0.9em;
+    color: var(--fg);
+}
+
+/* --- Centered auth card (sign-in redirect, access denied, logout) ----- */
+.auth-shell {
+    display: grid;
+    place-items: center;
+    min-height: 55vh;
+}
+.auth-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 2.5rem 2.25rem;
+    text-align: center;
+    max-width: 420px;
+    width: 100%;
+}
+.auth-card h1 { margin: 0.5rem 0 0.6rem; font-size: 1.5rem; font-weight: 700; color: var(--fg); }
+.auth-card p { color: var(--muted); margin: 0.35rem 0 0; }
+.auth-card .actions-center { margin-top: 1.5rem; }
+.icon-badge {
+    display: inline-grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 0.5rem;
+    border-radius: 50%;
+    background: #FEF2F2;
+    color: #DC2626;
+    font-size: 1.6rem;
+}
+
+.spinner {
+    width: 42px;
+    height: 42px;
+    margin: 0 auto 0.5rem;
+    border: 4px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* --- Footer ----------------------------------------------------------- */
+.footer {
+    text-align: center;
+    padding: 1.5rem;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border);
+}
+.footer a { color: var(--muted); }
+
+/* --- Small screens ---------------------------------------------------- */
+@media (max-width: 560px) {
+    .nav-inner { gap: 0.85rem; padding: 0.75rem 1rem; }
+    .container { padding: 1.75rem 1rem; }
+    dl.claims { grid-template-columns: 1fr; gap: 0.1rem 0; }
+    dl.claims dd { margin-bottom: 0.6rem; }
+}

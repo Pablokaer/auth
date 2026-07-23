@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Pulumi infrastructure program (C#).
+    Provider-neutral scaffold. Concrete cloud provider packages (e.g.
+    Pulumi.AzureNative / Pulumi.Aws / Pulumi.Gcp / Pulumi.Kubernetes) are added
+    later at the marked extension points once the target provider is chosen.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>CentralLogin.Pulumi</RootNamespace>
+    <AssemblyName>CentralLogin.Pulumi</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <RunAnalyzers>false</RunAnalyzers>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Pulumi" />
+    <PackageReference Include="Pulumi.AzureNative" />
+  </ItemGroup>
+
+</Project>

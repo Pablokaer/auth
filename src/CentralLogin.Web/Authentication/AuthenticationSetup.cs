@@ -1,0 +1,138 @@
+using System.Security.Claims;
+using CentralLogin.Application.Users;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Http;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using Microsoft.IdentityModel.Tokens;
+
+namespace CentralLogin.Web.Authentication;
+
+public static class AuthenticationSetup
+{
+    /// <summary>
+    /// Configures cookie + OpenID Connect authentication against Keycloak using
+    /// the Authorization Code flow with PKCE. State/nonce validation, issuer,
+    /// audience, lifetime and signing-key validation are all performed by the
+    /// standard ASP.NET Core handler.
+    /// </summary>
+    public static IServiceCollection AddKeycloakAuthentication(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        IHostEnvironment environment)
+    {
+        var options = configuration
+            .GetSection(KeycloakAuthenticationOptions.SectionName)
+            .Get<KeycloakAuthenticationOptions>() ?? new KeycloakAuthenticationOptions();
+
+        services.AddSingleton(options);
+        services.AddTransient<IClaimsTransformation, KeycloakRolesClaimsTransformation>();
+
+        var isDevelopment = environment.IsDevelopment();
+
+        services.AddAuthentication(auth =>
+        {
+            auth.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+            auth.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
+        })
+        .AddCookie(cookie =>
+        {
+            // __Host- prefix enforces Secure + Path=/ + no Domain; only valid
+            // over HTTPS, so use a plain name in local (HTTP) development.
+            cookie.Cookie.Name = isDevelopment ? "CentralLogin.Auth" : "__Host-CentralLogin.Auth";
+            cookie.Cookie.HttpOnly = true;
+            cookie.Cookie.SameSite = SameSiteMode.Lax;
+            cookie.Cookie.SecurePolicy = isDevelopment
+                ? CookieSecurePolicy.SameAsRequest
+                : CookieSecurePolicy.Always;
+            cookie.SlidingExpiration = true;
+            cookie.ExpireTimeSpan = TimeSpan.FromHours(8);
+            cookie.LoginPath = "/Account/Login";
+            cookie.LogoutPath = "/Account/Logout";
+            cookie.AccessDeniedPath = "/Account/AccessDenied";
+        })
+        .AddOpenIdConnect(oidc =>
+        {
+            oidc.Authority = options.Authority;
+            oidc.ClientId = options.ClientId;
+            oidc.ClientSecret = options.ClientSecret;
+            oidc.RequireHttpsMetadata = options.RequireHttpsMetadata;
+
+            // Authorization Code flow + PKCE (confidential client).
+            oidc.ResponseType = OpenIdConnectResponseType.Code;
+            oidc.UsePkce = true;
+            oidc.ResponseMode = OpenIdConnectResponseMode.Query;
+
+            oidc.SaveTokens = true;                        // enables id_token_hint on logout
+            oidc.GetClaimsFromUserInfoEndpoint = true;
+            oidc.MapInboundClaims = false;                 // keep original claim names (sub, realm_access, ...)
+
+            oidc.CallbackPath = options.CallbackPath;
+            oidc.SignedOutCallbackPath = options.SignedOutCallbackPath;
+
+            oidc.Scope.Clear();
+            oidc.Scope.Add(OpenIdConnectScope.OpenId);
+            oidc.Scope.Add("profile");
+            oidc.Scope.Add("email");
+            oidc.Scope.Add("roles");
+
+            // Explicit, defence-in-depth validation (these are also defaults).
+            oidc.TokenValidationParameters = new TokenValidationParameters
+            {
+                NameClaimType = "preferred_username",
+                RoleClaimType = ClaimTypes.Role,
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
+                ClockSkew = TimeSpan.FromMinutes(2),
+            };
+
+            oidc.Events = new OpenIdConnectEvents
+            {
+                // Provision/update the local user right after the token is validated.
+                OnTokenValidated = ProvisionLocalUserAsync,
+
+                // Never surface raw error details (which may include codes) to the
+                // browser or logs; redirect to a generic error page.
+                OnRemoteFailure = context =>
+                {
+                    context.Response.Redirect("/Error?source=auth");
+                    context.HandleResponse();
+                    return Task.CompletedTask;
+                },
+            };
+        });
+
+        return services;
+    }
+
+    private static async Task ProvisionLocalUserAsync(TokenValidatedContext context)
+    {
+        var principal = context.Principal;
+        if (principal is null)
+        {
+            return;
+        }
+
+        var subject = principal.FindFirst("sub")?.Value
+                      ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (string.IsNullOrWhiteSpace(subject))
+        {
+            return;
+        }
+
+        var displayName = principal.FindFirst("name")?.Value
+                          ?? principal.FindFirst("preferred_username")?.Value;
+        var email = principal.FindFirst("email")?.Value;
+
+        var provisioning = context.HttpContext.RequestServices
+            .GetRequiredService<IUserProvisioningService>();
+
+        await provisioning.ProvisionOrUpdateAsync(
+            new ProvisionUserCommand(subject, displayName, email),
+            context.HttpContext.RequestAborted);
+    }
+}

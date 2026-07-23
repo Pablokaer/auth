@@ -1,0 +1,54 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Home";
+    var isAuthenticated = User.Identity?.IsAuthenticated == true;
+}
+
+<section class="hero">
+    @if (isAuthenticated)
+    {
+        <div class="hero-row">
+            <div class="hero-copy">
+                <h1>Welcome back, @User.Identity!.Name</h1>
+                <p class="lead">You are signed in. Head to your dashboard to view your identity and session details.</p>
+                <div class="actions">
+                    <a class="btn" asp-page="/Dashboard">Go to dashboard</a>
+                    <a class="btn secondary" asp-page="/Account/Logout">Sign out</a>
+                </div>
+            </div>
+            <img src="~/images/hero.png" alt="" class="hero-img" />
+        </div>
+    }
+    else
+    {
+        <div class="hero-row">
+            <div class="hero-copy">
+                <h1>Secure access, centralized</h1>
+                <p class="lead">
+                    CentralLogin provides single sign-on for your applications, powered by
+                    Keycloak and OpenID Connect. One identity, everywhere.
+                </p>
+            </div>
+            <img src="~/images/hero.png" alt="" class="hero-img" />
+        </div>
+    }
+</section>
+
+<div class="features">
+    <div class="feature">
+        <div class="icon">&#128274;</div>
+        <h3>Secure by design</h3>
+        <p>Authorization Code flow with PKCE, strict CSP, and hardened cookies out of the box.</p>
+    </div>
+    <div class="feature">
+        <div class="icon">&#128273;</div>
+        <h3>OpenID Connect</h3>
+        <p>Standards-based identity via Keycloak. Tokens are validated by battle-tested middleware.</p>
+    </div>
+    <div class="feature">
+        <div class="icon">&#128101;</div>
+        <h3>Single sign-on</h3>
+        <p>One account across every connected application, with role-based access control.</p>
+    </div>
+</div>

@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run AppHost (Aspire)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/src/CentralLogin.AppHost/bin/Debug/net10.0/CentralLogin.AppHost.dll",
+      "cwd": "${workspaceFolder}/src/CentralLogin.AppHost",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    },
+    {
+      "name": "Run Web only",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/src/CentralLogin.Web/bin/Debug/net10.0/CentralLogin.Web.dll",
+      "cwd": "${workspaceFolder}/src/CentralLogin.Web",
+      "env": { "ASPNETCORE_ENVIRONMENT": "Development" }
+    }
+  ]
+}

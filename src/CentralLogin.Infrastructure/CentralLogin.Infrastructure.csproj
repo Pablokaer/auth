@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Infrastructure layer.
+    EF Core + SQLite, DbContext, entity configurations, repositories,
+    migrations and external service implementations. Depends on Application
+    and Domain. This is the ONLY layer that knows about the database.
+  -->
+  <PropertyGroup>
+    <RootNamespace>CentralLogin.Infrastructure</RootNamespace>
+    <AssemblyName>CentralLogin.Infrastructure</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CentralLogin.Domain\CentralLogin.Domain.csproj" />
+    <ProjectReference Include="..\CentralLogin.Application\CentralLogin.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>

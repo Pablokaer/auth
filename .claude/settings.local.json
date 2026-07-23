@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(dotnet run *)",
+      "PowerShell(Out-Null *)"
+    ]
+  }
+}

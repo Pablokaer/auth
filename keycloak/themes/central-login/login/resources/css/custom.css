@@ -1,0 +1,159 @@
+/* =====================================================================
+   CentralLogin — Keycloak login theme override
+   Matches the app's Microsoft Fluent-inspired design system (Deep Teal).
+   Loaded AFTER PatternFly and the base "keycloak" login stylesheet, so
+   these rules take precedence. Colors mirror wwwroot/css/site.css.
+   ===================================================================== */
+
+:root {
+    --cl-primary: #0F5C6E;        /* Deep Teal — primary */
+    --cl-primary-hover: #0C4C5A;  /* primary hover */
+    --cl-soft: #DDF3F5;           /* Soft Cyan — secondary accent */
+    --cl-bg: #FFFFFF;             /* surface */
+    --cl-section: #F8F9FB;        /* page / section background */
+    --cl-border: #E5E7EB;         /* borders */
+    --cl-fg: #111827;             /* primary text */
+    --cl-muted: #6B7280;          /* secondary text */
+    --cl-radius-card: 18px;       /* cards */
+    --cl-radius: 10px;            /* buttons / inputs */
+    --cl-ring: 0 0 0 3px rgba(15, 92, 110, 0.22);   /* teal focus ring */
+}
+
+/* --- Page background: replace the default gradient with a clean surface -- */
+html,
+body.login-pf,
+.login-pf body {
+    background: var(--cl-section) !important;
+}
+
+body {
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    color: var(--cl-fg);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* --- Header (realm / application name) -------------------------------- */
+#kc-header-wrapper {
+    color: var(--cl-fg);
+    font-weight: 700;
+    letter-spacing: -0.2px;
+}
+
+/* --- Login card ------------------------------------------------------- */
+.card-pf {
+    background: var(--cl-bg);
+    border: 1px solid var(--cl-border);
+    border-radius: var(--cl-radius-card);
+    box-shadow: 0 1px 3px rgba(17, 24, 39, 0.06), 0 8px 24px rgba(17, 24, 39, 0.04);
+}
+
+/* --- Titles inside the card ------------------------------------------- */
+#kc-page-title,
+.pf-c-title,
+h1, h2 {
+    color: var(--cl-fg);
+    font-weight: 700;
+}
+
+/* --- Form labels ------------------------------------------------------ */
+.pf-c-form__label,
+.pf-c-form__label-text,
+label {
+    color: var(--cl-fg);
+    font-weight: 500;
+}
+
+/* --- Inputs ----------------------------------------------------------- */
+.pf-c-form-control,
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="number"],
+select,
+textarea {
+    /* Use background-color (not the "background" shorthand) so we don't reset
+       background-repeat/position — otherwise PatternFly's inline error icon
+       tiles and covers the whole field. */
+    background-color: var(--cl-bg);
+    border: 1px solid var(--cl-border);
+    border-radius: var(--cl-radius);
+    color: var(--cl-fg);
+}
+.pf-c-form-control:focus,
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="email"]:focus,
+input[type="number"]:focus,
+select:focus,
+textarea:focus {
+    outline: none;
+    border-color: var(--cl-primary);
+    box-shadow: var(--cl-ring);
+}
+
+/* On a failed login, show only the textual message — hide PatternFly's inline
+   exclamation/error icon on the invalid username & password fields. */
+.pf-c-form-control.pf-m-error,
+.pf-c-form-control[aria-invalid="true"],
+input[aria-invalid="true"] {
+    background-image: none !important;
+}
+
+/* --- Primary button --------------------------------------------------- */
+.pf-c-button.pf-m-primary,
+#kc-login,
+input[type="submit"].pf-c-button,
+input[type="submit"] {
+    background-color: var(--cl-primary);
+    border-color: var(--cl-primary);
+    border-radius: var(--cl-radius);
+    color: #fff;
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(17, 24, 39, 0.10), 0 2px 8px rgba(15, 92, 110, 0.16);
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+.pf-c-button.pf-m-primary:hover,
+#kc-login:hover,
+input[type="submit"]:hover {
+    background-color: var(--cl-primary-hover);
+    border-color: var(--cl-primary-hover);
+}
+.pf-c-button.pf-m-primary:focus-visible,
+#kc-login:focus-visible {
+    outline: none;
+    box-shadow: var(--cl-ring);
+}
+
+/* --- Secondary button ------------------------------------------------- */
+.pf-c-button.pf-m-secondary {
+    background: var(--cl-bg);
+    border: 1px solid var(--cl-border);
+    color: var(--cl-fg);
+    border-radius: var(--cl-radius);
+}
+.pf-c-button.pf-m-secondary:hover {
+    background: var(--cl-section);
+}
+
+/* --- Links ------------------------------------------------------------ */
+a,
+#kc-registration a,
+#kc-info-wrapper a,
+.pf-c-button.pf-m-link {
+    color: var(--cl-primary);
+}
+a:hover {
+    color: var(--cl-primary-hover);
+}
+
+/* --- Checkboxes (e.g. "Remember me") ---------------------------------- */
+input[type="checkbox"],
+input[type="radio"] {
+    accent-color: var(--cl-primary);
+}
+
+/* --- Alerts: keep semantic colors, align the radius ------------------- */
+.pf-c-alert,
+.alert {
+    border-radius: var(--cl-radius);
+}

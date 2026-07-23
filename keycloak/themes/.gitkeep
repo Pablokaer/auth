@@ -1,0 +1,2 @@
+# Place optional custom Keycloak login themes here.
+# Mount this directory into the container at /opt/keycloak/themes to use them.

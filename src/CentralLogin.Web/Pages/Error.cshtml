@@ -1,0 +1,16 @@
+@page
+@model CentralLogin.Web.Pages.ErrorModel
+@{
+    ViewData["Title"] = "Error";
+}
+
+<h1>Something went wrong</h1>
+<p>An unexpected error occurred while processing your request. No sensitive
+   details are shown here by design.</p>
+
+@if (!string.IsNullOrEmpty(Model.RequestId))
+{
+    <p><strong>Request ID:</strong> <code>@Model.RequestId</code></p>
+}
+
+<p><a asp-page="/Index">Return home</a></p>

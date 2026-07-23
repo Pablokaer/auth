@@ -1,0 +1,19 @@
+@page
+@model CentralLogin.Web.Pages.Account.LogoutModel
+@{
+    ViewData["Title"] = "Sign out";
+}
+
+<h1>Sign out</h1>
+
+<div class="card">
+    <p>Choose how you want to sign out.</p>
+
+    <form method="post" asp-page-handler="Local">
+        <button class="btn secondary" type="submit">Sign out of this app only</button>
+    </form>
+
+    <form method="post" asp-page-handler="Global">
+        <button class="btn" type="submit">Sign out everywhere (Keycloak)</button>
+    </form>
+</div>
