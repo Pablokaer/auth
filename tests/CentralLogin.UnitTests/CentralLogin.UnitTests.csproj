@@ -16,6 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\CentralLogin.Domain\CentralLogin.Domain.csproj" />
     <ProjectReference Include="..\..\src\CentralLogin.Application\CentralLogin.Application.csproj" />
+    <ProjectReference Include="..\..\src\CentralLogin.Web\CentralLogin.Web.csproj" />
   </ItemGroup>
 
 </Project>

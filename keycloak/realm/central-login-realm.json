@@ -10,11 +10,23 @@
   "bruteForceProtected": true,
   "roles": {
     "realm": [
-      { "name": "user", "description": "Standard application user" },
-      { "name": "administrator", "description": "Application administrator" }
+      {
+        "name": "user",
+        "description": "Standard application user"
+      },
+      {
+        "name": "administrator",
+        "description": "Application administrator"
+      },
+      {
+        "name": "employee",
+        "description": "Employee portal user"
+      }
     ]
   },
-  "defaultRoles": ["user"],
+  "defaultRoles": [
+    "user"
+  ],
   "clients": [
     {
       "clientId": "central-login-web",
@@ -73,6 +85,196 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "admin-portal",
+      "name": "Admin Portal",
+      "description": "Confidential OIDC client for the AdminPortal Razor Pages app (admins only).",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": true,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5100/signout-callback-oidc"
+      },
+      "redirectUris": [
+        "http://localhost:5100/signin-oidc"
+      ],
+      "webOrigins": [
+        "http://localhost:5100"
+      ],
+      "protocolMappers": [
+        {
+          "name": "realm roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "employee_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "employee_id",
+            "claim.name": "employee_id",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "department",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "department",
+            "claim.name": "department",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "manager",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "manager",
+            "claim.name": "manager",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "office_location",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "office_location",
+            "claim.name": "office_location",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "employee-portal",
+      "name": "Employee Portal",
+      "description": "Confidential OIDC client for the EmployeePortal Razor Pages app.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": true,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5001/signout-callback-oidc"
+      },
+      "redirectUris": [
+        "http://localhost:5001/signin-oidc"
+      ],
+      "webOrigins": [
+        "http://localhost:5001"
+      ],
+      "protocolMappers": [
+        {
+          "name": "realm roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "employee_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "employee_id",
+            "claim.name": "employee_id",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "department",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "department",
+            "claim.name": "department",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "manager",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "manager",
+            "claim.name": "manager",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "office_location",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "office_location",
+            "claim.name": "office_location",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
     }
   ],
   "users": [
@@ -83,8 +285,103 @@
       "email": "dev-admin@example.local",
       "firstName": "Dev",
       "lastName": "Admin",
-      "realmRoles": ["user", "administrator"],
-      "_comment_credentials": "No password is stored here on purpose. Set it AFTER import with keycloak/configure-dev.sh, which reads KEYCLOAK_DEV_ADMIN_PASSWORD from the environment. See keycloak/README.md."
+      "realmRoles": [
+        "user",
+        "administrator"
+      ],
+      "attributes": {
+        "employee_id": [
+          "E-1001"
+        ],
+        "department": [
+          "IT"
+        ],
+        "manager": [
+          "Chief Executive Officer"
+        ],
+        "office_location": [
+          "HQ - Lisbon"
+        ]
+      }
+    },
+    {
+      "username": "dev-user",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "dev-user@example.local",
+      "firstName": "Dev",
+      "lastName": "User",
+      "realmRoles": [
+        "user"
+      ],
+      "attributes": {
+        "employee_id": [
+          "E-2002"
+        ],
+        "department": [
+          "Sales"
+        ],
+        "manager": [
+          "Dev Admin"
+        ],
+        "office_location": [
+          "Branch - Porto"
+        ]
+      }
+    },
+    {
+      "username": "central.portal",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "central.portal@finperiti.com",
+      "firstName": "Central",
+      "lastName": "Portal",
+      "realmRoles": [
+        "user"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Central123!",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "employee.central",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "employee.central@finperiti.com",
+      "firstName": "Employee",
+      "lastName": "Central",
+      "realmRoles": [
+        "employee"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Employee123!",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "admin.portal",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "admin.portal@finperiti.com",
+      "firstName": "Admin",
+      "lastName": "Portal",
+      "realmRoles": [
+        "administrator"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Admin123!",
+          "temporary": false
+        }
+      ]
     }
   ]
 }

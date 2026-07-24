@@ -9,4 +9,5 @@ public static class ApplicationRoles
 {
     public const string User = "user";
     public const string Administrator = "administrator";
+    public const string Employee = "employee";
 }

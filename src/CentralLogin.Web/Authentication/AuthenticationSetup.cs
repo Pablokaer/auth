@@ -26,7 +26,13 @@ public static class AuthenticationSetup
             .GetSection(KeycloakAuthenticationOptions.SectionName)
             .Get<KeycloakAuthenticationOptions>() ?? new KeycloakAuthenticationOptions();
 
+        var portalOptions = configuration
+            .GetSection(PortalRoutingOptions.SectionName)
+            .Get<PortalRoutingOptions>() ?? new PortalRoutingOptions();
+
         services.AddSingleton(options);
+        services.AddSingleton(portalOptions);
+        services.AddSingleton<PortalRouter>();
         services.AddTransient<IClaimsTransformation, KeycloakRolesClaimsTransformation>();
 
         var isDevelopment = environment.IsDevelopment();
@@ -94,6 +100,10 @@ public static class AuthenticationSetup
                 // Provision/update the local user right after the token is validated.
                 OnTokenValidated = ProvisionLocalUserAsync,
 
+                // Home each account to its portal: administrator -> Admin (5100),
+                // employee -> Employee (5001), everyone else stays on central (5080).
+                OnTicketReceived = RouteToHomePortal,
+
                 // Never surface raw error details (which may include codes) to the
                 // browser or logs; redirect to a generic error page.
                 OnRemoteFailure = context =>
@@ -134,5 +144,31 @@ public static class AuthenticationSetup
         await provisioning.ProvisionOrUpdateAsync(
             new ProvisionUserCommand(subject, displayName, email),
             context.HttpContext.RequestAborted);
+    }
+
+    /// <summary>
+    /// After a successful sign-in, redirects the account to its home portal
+    /// based on realm role. Central/user accounts fall through to their normal
+    /// local return URL; employee and administrator accounts are bounced to the
+    /// dedicated portal, which completes its own login silently via the shared
+    /// Keycloak SSO session. The role decides the destination regardless of
+    /// where the sign-in was initiated from.
+    /// </summary>
+    private static Task RouteToHomePortal(TicketReceivedContext context)
+    {
+        if (context.Principal is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        var router = context.HttpContext.RequestServices.GetRequiredService<PortalRouter>();
+        var portalUrl = router.ResolveHomePortalUrl(context.Principal);
+
+        if (!string.IsNullOrWhiteSpace(portalUrl))
+        {
+            context.ReturnUri = portalUrl;
+        }
+
+        return Task.CompletedTask;
     }
 }

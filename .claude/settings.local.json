@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "PowerShell(dotnet run *)",
-      "PowerShell(Out-Null *)"
+      "PowerShell(Out-Null *)",
+      "PowerShell($pairs = @\\(\"admin:admin\",\"admin:admin123\",\"admin:Pa55w0rd\"\\) ; foreach\\($p in $pairs\\){ $u,$pw=$p.Split\\(':'\\); try { $body=@{client_id='admin-cli';username=$u;password=$pw;grant_type='password'}; $t=Invoke-RestMethod -Uri \"http://localhost:8080/realms/master/protocol/openid-connect/token\" -Method Post -Body $body -TimeoutSec 6; Write-Output \"ADMIN_OK creds=$p token_len=$\\($t.access_token.Length\\)\"; $env:KC_TOKEN=$t.access_token; break } catch { Write-Output \"fail $p : $\\($_.Exception.Message\\)\" } })"
     ]
   }
 }
