@@ -20,7 +20,7 @@ public sealed class ApplicationUserConfiguration : IEntityTypeConfiguration<Appl
                 subject => subject.Value,
                 value => KeycloakSubject.Create(value))
             .HasColumnName("KeycloakSubject")
-            .HasMaxLength(255)
+            .HasMaxLength(ApplicationUserLimits.KeycloakSubjectMaxLength)
             .IsRequired();
 
         // Unique index on the permanent external identity key.
@@ -29,10 +29,10 @@ public sealed class ApplicationUserConfiguration : IEntityTypeConfiguration<Appl
             .HasDatabaseName("IX_ApplicationUsers_KeycloakSubject");
 
         builder.Property(u => u.DisplayName)
-            .HasMaxLength(256);
+            .HasMaxLength(ApplicationUserLimits.DisplayNameMaxLength);
 
         builder.Property(u => u.EmailSnapshot)
-            .HasMaxLength(320);
+            .HasMaxLength(ApplicationUserLimits.EmailSnapshotMaxLength);
 
         builder.Property(u => u.CreatedAtUtc)
             .IsRequired();
