@@ -338,13 +338,6 @@
       "lastName": "Portal",
       "realmRoles": [
         "user"
-      ],
-      "credentials": [
-        {
-          "type": "password",
-          "value": "Central123!",
-          "temporary": false
-        }
       ]
     },
     {
@@ -356,13 +349,6 @@
       "lastName": "Central",
       "realmRoles": [
         "employee"
-      ],
-      "credentials": [
-        {
-          "type": "password",
-          "value": "Employee123!",
-          "temporary": false
-        }
       ]
     },
     {
@@ -374,13 +360,6 @@
       "lastName": "Portal",
       "realmRoles": [
         "administrator"
-      ],
-      "credentials": [
-        {
-          "type": "password",
-          "value": "Admin123!",
-          "temporary": false
-        }
       ]
     }
   ]
