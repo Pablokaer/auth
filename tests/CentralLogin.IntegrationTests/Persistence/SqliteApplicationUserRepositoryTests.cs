@@ -1,3 +1,4 @@
+using CentralLogin.Application.Abstractions;
 using CentralLogin.Domain.Users;
 using CentralLogin.Infrastructure.Persistence;
 using CentralLogin.Infrastructure.Persistence.Repositories;
@@ -63,6 +64,37 @@ public sealed class SqliteApplicationUserRepositoryTests : IDisposable
         await repository.AddAsync(ApplicationUser.Provision(KeycloakSubject.Create("dup"), "B", null, now));
 
         await Assert.ThrowsAsync<DbUpdateException>(() => repository.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task TryAddAsync_reports_AlreadyExists_only_for_the_subject_unique_index_collision()
+    {
+        var repository = new ApplicationUserRepository(_dbContext);
+        var now = DateTime.UtcNow;
+
+        await repository.AddAsync(ApplicationUser.Provision(KeycloakSubject.Create("try-add-dup"), "A", null, now));
+        await repository.SaveChangesAsync();
+
+        var outcome = await repository.TryAddAsync(
+            ApplicationUser.Provision(KeycloakSubject.Create("try-add-dup"), "B", null, now));
+
+        Assert.Equal(UserAddOutcome.AlreadyExists, outcome);
+    }
+
+    [Fact]
+    public async Task TryAddAsync_propagates_unrelated_persistence_failures()
+    {
+        var repository = new ApplicationUserRepository(_dbContext);
+
+        // An unrelated persistence failure (not a KeycloakSubject unique-index
+        // collision) must still surface as a raw DbUpdateException, not be
+        // misclassified as AlreadyExists. Dropping the table reproduces a
+        // generic SQLite failure without going anywhere near the unique index.
+        await _dbContext.Database.ExecuteSqlRawAsync("DROP TABLE ApplicationUsers");
+
+        var user = ApplicationUser.Provision(KeycloakSubject.Create("unrelated-failure"), "A", null, DateTime.UtcNow);
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => repository.TryAddAsync(user));
     }
 
     public void Dispose()

@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using CentralLogin.Application.Abstractions;
 using CentralLogin.Domain.Users;
 using FluentValidation;
@@ -44,35 +42,34 @@ public sealed class UserProvisioningService : IUserProvisioningService
         var now = _clock.UtcNow;
 
         var user = await _repository.GetBySubjectAsync(subject, cancellationToken);
-        bool wasCreated = false;
 
         if (user is null)
         {
-            user = ApplicationUser.Provision(subject, command.DisplayName, command.Email, now);
-            await _repository.AddAsync(user, cancellationToken);
-            wasCreated = true;
-            _logger.LogInformation(
-                "Provisioned new local user for subject {SubjectHash}.",
-                HashForLog(subject.Value));
-        }
-        else
-        {
-            user.RecordLogin(command.DisplayName, command.Email, now);
-            _logger.LogInformation("Updated local user {UserId} on login.", user.Id);
+            var candidate = ApplicationUser.Provision(subject, command.DisplayName, command.Email, now);
+            var outcome = await _repository.TryAddAsync(candidate, cancellationToken);
+
+            if (outcome == UserAddOutcome.Added)
+            {
+                _logger.LogInformation(
+                    "Provisioned new local user for subject {SubjectHash}.",
+                    SubjectLogHash.Compute(subject.Value));
+                return ApplicationUserResult.From(candidate, wasCreated: true);
+            }
+
+            // Lost the race against a concurrent first login for the same subject:
+            // the unique index rejected our insert. Single bounded retry - re-read
+            // the row the other caller committed and fall through to the
+            // existing-user path below (no loop; a second collision would be a
+            // genuine bug rather than a race, and should throw).
+            user = await _repository.GetBySubjectAsync(subject, cancellationToken)
+                ?? throw new InvalidOperationException(
+                    "Expected an existing ApplicationUser after a KeycloakSubject unique-index collision.");
         }
 
+        user.RecordLogin(command.DisplayName, command.Email, now);
         await _repository.SaveChangesAsync(cancellationToken);
-        return ApplicationUserResult.From(user, wasCreated);
-    }
+        _logger.LogInformation("Updated local user {UserId} on login.", user.Id);
 
-    /// <summary>
-    /// Produces a short, stable, non-reversible tag for correlating log lines
-    /// without ever emitting the raw subject identifier.
-    /// </summary>
-    private static string HashForLog(string value)
-    {
-        Span<byte> hash = stackalloc byte[32];
-        SHA256.HashData(Encoding.UTF8.GetBytes(value), hash);
-        return Convert.ToHexString(hash)[..12];
+        return ApplicationUserResult.From(user, wasCreated: false);
     }
 }
