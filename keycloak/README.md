@@ -25,12 +25,16 @@ HTTPS, health endpoint, metrics, database connection and bootstrap admin.
 - realm `central-login`
 - confidential client `central-login-web` (Authorization Code + PKCE S256),
   with **exact** dev redirect URIs and post-logout redirect URIs
-- realm roles `user` and `administrator`
-- a `dev-admin` user with those roles but **no password**
+- realm roles `user`, `administrator` and `employee`
+- five local test users — `dev-admin`, `dev-user`, `central.portal`,
+  `employee.central` and `admin.portal` — with their app roles but **no
+  password**
 
-It deliberately does **not** contain the client secret or any password.
+It deliberately does **not** contain the client secret or any password. This is
+enforced by a test (`tests/CentralLogin.IntegrationTests`) that scans every
+file under `keycloak/` and fails the build if a credential is reintroduced.
 
-## First-time local setup (secret + dev-admin password)
+## First-time local setup (secret + local test user passwords)
 
 After the AppHost starts Keycloak and imports the realm, run once:
 
@@ -40,8 +44,17 @@ export KEYCLOAK_ADMIN_USERNAME="$KEYCLOAK_ADMIN_USERNAME"
 export KEYCLOAK_ADMIN_PASSWORD="$KEYCLOAK_ADMIN_PASSWORD"
 export CENTRALLOGIN_WEB_CLIENT_SECRET="$(openssl rand -base64 32)"   # or your chosen value
 export KEYCLOAK_DEV_ADMIN_PASSWORD="$(openssl rand -base64 24)"
+export KEYCLOAK_CENTRAL_PORTAL_PASSWORD="$(openssl rand -base64 24)"
+export KEYCLOAK_EMPLOYEE_CENTRAL_PASSWORD="$(openssl rand -base64 24)"
+export KEYCLOAK_ADMIN_PORTAL_PASSWORD="$(openssl rand -base64 24)"
 ./keycloak/configure-dev.sh
 ```
+
+`dev-user` is not wired into `configure-dev.sh` and stays without a password,
+same as before — set one by hand in the admin console if you need it (**Users
+→ dev-user → Credentials → Set password**, turn *Temporary* off). See the main
+README's [Test accounts](../README.md#test-accounts-local-development) section
+for a quick, recognizable local-dev convention covering all the accounts above.
 
 Then store the same `CENTRALLOGIN_WEB_CLIENT_SECRET` for the web app via
 user-secrets so the app and Keycloak agree:

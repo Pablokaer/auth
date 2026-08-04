@@ -5,15 +5,19 @@
 # Runs AFTER Keycloak has started and imported the central-login realm. It:
 #   1. sets the confidential client secret for `central-login-web` to the value
 #      of $CENTRALLOGIN_WEB_CLIENT_SECRET (so it matches the web app's secret), and
-#   2. sets the dev-admin user's password to $KEYCLOAK_DEV_ADMIN_PASSWORD.
+#   2. sets the password for each of the realm's local test users — dev-admin
+#      and the three portal accounts (central.portal, employee.central,
+#      admin.portal) — from the matching environment variable.
 #
-# No secret or password is ever stored in the repository — both values are read
+# No secret or password is ever stored in the repository — every value is read
 # from the environment (populate them via .env / user-secrets / Aspire params).
 #
 # Usage (zsh/bash, macOS):
 #   export KEYCLOAK_URL=http://localhost:8080
 #   export KEYCLOAK_ADMIN_USERNAME=... KEYCLOAK_ADMIN_PASSWORD=...
 #   export CENTRALLOGIN_WEB_CLIENT_SECRET=... KEYCLOAK_DEV_ADMIN_PASSWORD=...
+#   export KEYCLOAK_CENTRAL_PORTAL_PASSWORD=... KEYCLOAK_EMPLOYEE_CENTRAL_PASSWORD=...
+#   export KEYCLOAK_ADMIN_PORTAL_PASSWORD=...
 #   ./keycloak/configure-dev.sh
 # ---------------------------------------------------------------------------
 set -euo pipefail
@@ -26,6 +30,9 @@ CLIENT_ID="central-login-web"
 : "${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}"
 : "${CENTRALLOGIN_WEB_CLIENT_SECRET:?set CENTRALLOGIN_WEB_CLIENT_SECRET}"
 : "${KEYCLOAK_DEV_ADMIN_PASSWORD:?set KEYCLOAK_DEV_ADMIN_PASSWORD}"
+: "${KEYCLOAK_CENTRAL_PORTAL_PASSWORD:?set KEYCLOAK_CENTRAL_PORTAL_PASSWORD}"
+: "${KEYCLOAK_EMPLOYEE_CENTRAL_PASSWORD:?set KEYCLOAK_EMPLOYEE_CENTRAL_PASSWORD}"
+: "${KEYCLOAK_ADMIN_PORTAL_PASSWORD:?set KEYCLOAK_ADMIN_PORTAL_PASSWORD}"
 
 # Locate kcadm.sh inside the running Keycloak container (adjust name if needed).
 KC_CONTAINER="${KC_CONTAINER:-$(docker ps --filter "ancestor=quay.io/keycloak/keycloak:26.5.6" --format '{{.Names}}' | head -1)}"
@@ -47,4 +54,13 @@ kc update "clients/${CID}" -r "${REALM}" -s "secret=${CENTRALLOGIN_WEB_CLIENT_SE
 echo "Setting dev-admin password ..."
 kc set-password -r "${REALM}" --username dev-admin --new-password "${KEYCLOAK_DEV_ADMIN_PASSWORD}"
 
-echo "Done. central-login-web secret and dev-admin password are configured."
+echo "Setting central.portal password ..."
+kc set-password -r "${REALM}" --username central.portal --new-password "${KEYCLOAK_CENTRAL_PORTAL_PASSWORD}"
+
+echo "Setting employee.central password ..."
+kc set-password -r "${REALM}" --username employee.central --new-password "${KEYCLOAK_EMPLOYEE_CENTRAL_PASSWORD}"
+
+echo "Setting admin.portal password ..."
+kc set-password -r "${REALM}" --username admin.portal --new-password "${KEYCLOAK_ADMIN_PORTAL_PASSWORD}"
+
+echo "Done. central-login-web secret and all local test user passwords are configured."

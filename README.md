@@ -218,18 +218,24 @@ The application database is **SQLite** — a local file at
 
 The realm import (`keycloak/realm/central-login-realm.json`) defines the
 `central-login` realm, the confidential `central-login-web` client (Authorization
-Code + PKCE, exact dev redirect and post-logout URIs), the `user` and
-`administrator` realm roles, and a `dev-admin` user **with no password**. It
-contains **no secrets**.
+Code + PKCE, exact dev redirect and post-logout URIs), the `user`,
+`administrator` and `employee` realm roles, and five local test users —
+`dev-admin`, `dev-user`, `central.portal`, `employee.central` and
+`admin.portal` — **none of which have a password**. It contains **no secrets**
+(enforced by a test that scans `keycloak/` and fails the build if a password or
+secret value is reintroduced).
 
-After the first `aspire run`, configure the client secret and dev-admin password
-(values read from your environment, never stored in the repo):
+After the first `aspire run`, configure the client secret and the local test
+user passwords (values read from your environment, never stored in the repo):
 
 ```zsh
 export KEYCLOAK_URL=http://localhost:8080
 export KEYCLOAK_ADMIN_USERNAME=admin KEYCLOAK_ADMIN_PASSWORD='<your admin pw>'
 export CENTRALLOGIN_WEB_CLIENT_SECRET='<same secret as user-secrets>'
 export KEYCLOAK_DEV_ADMIN_PASSWORD="$(openssl rand -base64 24)"
+export KEYCLOAK_CENTRAL_PORTAL_PASSWORD="$(openssl rand -base64 24)"
+export KEYCLOAK_EMPLOYEE_CENTRAL_PASSWORD="$(openssl rand -base64 24)"
+export KEYCLOAK_ADMIN_PORTAL_PASSWORD="$(openssl rand -base64 24)"
 ./keycloak/configure-dev.sh
 ```
 
@@ -252,7 +258,7 @@ edit `keycloak/themes/central-login/login/resources/css/custom.css`. Under
 ## Test accounts (local development)
 
 > **Local development only.** By design the repository commits **no passwords**
-> (see [Security](#security)). The realm import creates the `dev-admin` user
+> (see [Security](#security)). The realm import creates all of its local users
 > **without** a password, and the Keycloak admin password is whatever you supply
 > via env / user-secrets. So the passwords below are **conventional local-dev
 > values you set yourself** with the commands that follow — they let the next
@@ -262,29 +268,50 @@ edit `keycloak/themes/central-login/login/resources/css/custom.css`. Under
 |---|---|---|---|---|
 | **Keycloak admin** (master realm) | `admin` | `TroqueEstaSenha123!` | — | Admin console: http://localhost:8080/admin |
 | **App test user** (`central-login` realm) | `dev-admin` | `DevAdmin123!` | `user`, `administrator` | The web app: http://localhost:5080 |
+| **Central portal test user** | `central.portal` | `CentralPortal123!` | `user` | The web app: http://localhost:5080 |
+| **Employee portal test user** | `employee.central` | `EmployeeCentral123!` | `employee` | EmployeePortal: http://localhost:5001 |
+| **Admin portal test user** | `admin.portal` | `AdminPortal123!` | `administrator` | AdminPortal: http://localhost:5100 |
 
 `dev-admin` (display name **Dev Admin**, email `dev-admin@example.local`) holds
 both the `user` and `administrator` realm roles, so it can reach the app's
-admin-only pages (`/Admin`).
+admin-only pages (`/Admin`). `central.portal`, `employee.central` and
+`admin.portal` are separate accounts matching the client each is meant to sign
+in to, so each portal can be exercised without borrowing `dev-admin`.
+
+> The three passwords above are new values chosen for this local-dev
+> convention — they intentionally **do not** reuse `Central123!`,
+> `Employee123!` or `Admin123!`, which were committed by mistake in an earlier
+> revision of the realm import and must be treated as burned.
+
+> **Already ran Keycloak before this change?** The realm import only runs
+> once, on first creation of the database/volume — so if you started Keycloak
+> before this fix, `Central123!`, `Employee123!` and `Admin123!` are still live
+> on your existing `central.portal`, `employee.central` and `admin.portal`
+> accounts. Re-run `keycloak/configure-dev.sh` (with the new passwords above)
+> to overwrite them; the import file itself will not do this for you.
 
 **Setting these passwords.** The Keycloak `admin` password is set when the
 container first starts (`KC_BOOTSTRAP_ADMIN_PASSWORD`, see
-[Local execution → B](#local-execution) — use `admin` locally). The `dev-admin`
-password is set **after** the realm import by `keycloak/configure-dev.sh`, which
-reads it from the environment:
+[Local execution → B](#local-execution) — use `admin` locally). The other
+passwords are set **after** the realm import by `keycloak/configure-dev.sh`,
+which reads each of them from the environment:
 
 ```zsh
 export KEYCLOAK_URL=http://localhost:8080
 export KEYCLOAK_ADMIN_USERNAME=admin KEYCLOAK_ADMIN_PASSWORD='admin'
 export CENTRALLOGIN_WEB_CLIENT_SECRET='<same secret you set for the web app>'
-export KEYCLOAK_DEV_ADMIN_PASSWORD='dev-admin'      # local-dev convention
+export KEYCLOAK_DEV_ADMIN_PASSWORD='dev-admin'                      # local-dev convention
+export KEYCLOAK_CENTRAL_PORTAL_PASSWORD='CentralPortal123!'         # local-dev convention
+export KEYCLOAK_EMPLOYEE_CENTRAL_PASSWORD='EmployeeCentral123!'     # local-dev convention
+export KEYCLOAK_ADMIN_PORTAL_PASSWORD='AdminPortal123!'             # local-dev convention
 ./keycloak/configure-dev.sh
 ```
 
 On **Windows/PowerShell** the same, with `$env:` assignments, e.g.
 `$env:KEYCLOAK_DEV_ADMIN_PASSWORD = 'dev-admin'`, then run the script via Git
-Bash / WSL. You can also set the password by hand in the admin console
-(**Users → dev-admin → Credentials → Set password**, turn *Temporary* off).
+Bash / WSL. You can also set any of these passwords by hand in the admin
+console (**Users → &lt;username&gt; → Credentials → Set password**, turn
+*Temporary* off).
 
 ## Testing
 
