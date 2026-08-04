@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
 
@@ -138,12 +139,34 @@ public static class AuthenticationSetup
                           ?? principal.FindFirst("preferred_username")?.Value;
         var email = principal.FindFirst("email")?.Value;
 
-        var provisioning = context.HttpContext.RequestServices
-            .GetRequiredService<IUserProvisioningService>();
+        try
+        {
+            var provisioning = context.HttpContext.RequestServices
+                .GetRequiredService<IUserProvisioningService>();
 
-        await provisioning.ProvisionOrUpdateAsync(
-            new ProvisionUserCommand(subject, displayName, email),
-            context.HttpContext.RequestAborted);
+            await provisioning.ProvisionOrUpdateAsync(
+                new ProvisionUserCommand(subject, displayName, email),
+                context.HttpContext.RequestAborted);
+        }
+        // Deliberately NOT caught here: an OperationCanceledException (e.g. the
+        // request was aborted) is left to propagate rather than logged as a
+        // provisioning failure - there is no meaningful outcome to report for a
+        // request that no longer exists.
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Explicit decision: a provisioning failure does NOT block sign-in.
+            // OnRemoteFailure only covers protocol-level OIDC failures, not
+            // exceptions thrown from OnTokenValidated - letting one through here
+            // would surface as an unhandled 500 on the user's very first sign-in
+            // for an unrelated (e.g. database) problem. The local user projection
+            // is best-effort and self-heals on the next login, so we log and let
+            // the already-validated identity proceed. Never log the raw subject;
+            // the hash lets an operator correlate this with provisioning logs.
+            context.HttpContext.RequestServices
+                .GetRequiredService<ILoggerFactory>()
+                .CreateLogger(typeof(AuthenticationSetup).FullName!)
+                .LogError(ex, "Local user provisioning failed for subject {SubjectHash}.", SubjectLogHash.Compute(subject));
+        }
     }
 
     /// <summary>

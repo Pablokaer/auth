@@ -27,4 +27,16 @@ public sealed class InMemoryApplicationUserRepository : IApplicationUserReposito
         SaveChangesCallCount++;
         return Task.CompletedTask;
     }
+
+    public Task<UserAddOutcome> TryAddAsync(ApplicationUser user, CancellationToken cancellationToken = default)
+    {
+        if (_users.Any(u => u.KeycloakSubject.Value == user.KeycloakSubject.Value))
+        {
+            return Task.FromResult(UserAddOutcome.AlreadyExists);
+        }
+
+        _users.Add(user);
+        SaveChangesCallCount++;
+        return Task.FromResult(UserAddOutcome.Added);
+    }
 }
