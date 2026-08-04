@@ -212,7 +212,10 @@ then served at **http://localhost:5080** (see [Ports](#ports)).
 | **Aspire dashboard** | dynamic (e.g. `https://localhost:5xxxx`) | Dev-only observability UI; only when running via the AppHost. |
 
 The application database is **SQLite** — a local file at
-`src/CentralLogin.Web/data/centrallogin.db`, not a network port.
+`src/CentralLogin.Web/data/centrallogin.db`, not a network port. It is generated
+automatically on first run (see [Database & migrations](#database--migrations))
+and is **not checked into git** — the database file and its WAL/SHM siblings are
+gitignored.
 
 ## Keycloak setup
 
@@ -335,8 +338,10 @@ needed. The architecture tests enforce the layering rules.
 
 SQLite lives in a configurable persistent directory (`Database:DataDirectory`,
 default `./data`), with WAL journaling, `synchronous=NORMAL`, a busy timeout and
-foreign keys enabled, and a unique index on `KeycloakSubject`. Migrations are
-applied automatically at startup.
+foreign keys enabled, and a unique index on `KeycloakSubject`. The directory and
+database file are created automatically — there is no `.db` file checked into
+git, and no manual setup step: the first `dotnet run` (or `aspire run`) creates
+`data/centrallogin.db` and applies all pending EF Core migrations at startup.
 
 ```zsh
 # Add a migration after changing the model:

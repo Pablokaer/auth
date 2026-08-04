@@ -427,3 +427,11 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# CentralLogin: local SQLite database (generated on first run from EF Core
+# migrations — see "Database & migrations" in README.md). Never commit the
+# live database file, its WAL/SHM siblings, or journal.
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
