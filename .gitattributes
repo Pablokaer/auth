@@ -16,11 +16,18 @@
 
 # Windows-only scripts, which their tooling expects as CRLF. None are
 # currently committed; the rules are here so that adding one does the right
-# thing. `*.ps1` is deliberately NOT listed: dotnet-install.ps1 is already
-# committed as LF, PowerShell reads LF fine, and pinning it to CRLF would
-# introduce a diff for no benefit.
+# thing.
 *.cmd text eol=crlf
 *.bat text eol=crlf
+
+# Vendored from Microsoft and Authenticode-signed: the signature only
+# verifies over the CRLF bytes that were signed. The blob is stored as LF
+# like everything else (so this adds no repository churn), but it must be
+# checked out as CRLF or `Get-AuthenticodeSignature` reports NotSigned
+# instead of Valid -- which is what core.autocrlf happened to give us before
+# this file existed. Not part of the solution, so FormatCheck is unaffected.
+# Any future signed .ps1 that is actually executed needs the same treatment.
+dotnet-install.ps1 text eol=crlf
 
 # Known binary types: never subject them to text detection or EOL rewriting.
 *.png binary

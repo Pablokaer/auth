@@ -14,6 +14,14 @@ indent_size = 2
 [*.md]
 trim_trailing_whitespace = false
 
+# Vendored from Microsoft and Authenticode-signed. Its signature verifies
+# over the exact bytes that were signed, so it is exempt from the [*] rules
+# above: .gitattributes checks it out as CRLF, and reformatting it here
+# (line endings or whitespace) would report it as NotSigned on Windows.
+[dotnet-install.ps1]
+end_of_line = crlf
+trim_trailing_whitespace = false
+
 [*.cs]
 # Language conventions
 dotnet_sort_system_directives_first = true
