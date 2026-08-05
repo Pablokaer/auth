@@ -46,20 +46,27 @@ Secrets never appear in outputs or in plain (non-secret-ref) container env vars
 ## What the plan prepares
 
 The `ResourcePlan` models, provider-agnostically: application hosting, Keycloak
-hosting, PostgreSQL for Keycloak, persistent storage, container registry, DNS,
-TLS certificates, secret management, logging, monitoring and backups. Each cloud
-provider implementation maps these to concrete resources.
+hosting, PostgreSQL (sized via `PostgresPlan.StorageSizeGigabytes` — Azure
+Database for PostgreSQL Flexible Server's minimum is 32 GiB), container
+registry, DNS, TLS certificates, secret management, logging, monitoring and
+backups. Each cloud provider implementation maps these to concrete resources.
+There is no separate "persistent storage" abstraction: the application database
+(`CentralLoginDbContext`) lives on a PostgreSQL server provisioned for
+Keycloak, in its own `centrallogin` database, so it survives replica restarts
+and is safe to share across `ApplicationHostingPlan.MinInstances` (2 in
+production) replicas — unlike a container-local SQLite file.
 
 ## Azure (selected provider)
 
 `AzureCloudProvider` (`Providers/Azure/`) is implemented with
 `Pulumi.AzureNative` `3.23.0` and provisions: a resource group, Log Analytics
-(logging + monitoring), Azure Container Registry, a Storage Account (persistent
-storage), Key Vault (secret management, RBAC), a user-assigned managed
-identity, a PostgreSQL Flexible Server for Keycloak (with the `keycloak`
-database, backup retention, and an "allow Azure services" firewall rule), and
-a Container Apps environment hosting the Web app and Keycloak — both fully
-wired with the environment variables and secrets they read at runtime:
+(logging + monitoring), Azure Container Registry, Key Vault (secret
+management, RBAC), a user-assigned managed identity, a PostgreSQL Flexible
+Server hosting both the `keycloak` database and the application's own
+`centrallogin` database (with backup retention and an "allow Azure services"
+firewall rule), and a Container Apps environment hosting the Web app and
+Keycloak — both fully wired with the environment variables and secrets they
+read at runtime:
 
 - **Keycloak** gets `KC_DB`/`KC_DB_URL`/`KC_DB_USERNAME` and a `KC_DB_PASSWORD`
   secret reference pointing at the Flexible Server, plus the ingress-related
@@ -70,18 +77,33 @@ wired with the environment variables and secrets they read at runtime:
   advertises the same issuer that `Keycloak__Authority` is built from. Set
   `KC_HOSTNAME` only once a custom domain is bound to the Keycloak app, and
   update `Keycloak__Authority` in lockstep.
-- **Web** gets `Keycloak__Authority`, `Keycloak__ClientId`, a `Keycloak__ClientSecret`
-  secret reference, and `Portals__AdminUrl`/`Portals__EmployeeUrl`.
-- Both `keycloakDbPassword` and `webClientSecret` are stored as Key Vault
-  secrets; the Container Apps read them via `Configuration.Secrets`
-  (`KeyVaultUrl` + the shared managed identity) and reference them from
+- **Web** gets `Keycloak__Authority`, `Keycloak__ClientId`, a
+  `Keycloak__ClientSecret` secret reference, `Portals__AdminUrl`/
+  `Portals__EmployeeUrl`, and `Database__Provider=Postgres` plus a
+  `Database__ConnectionString` secret reference pointing at its own
+  `centrallogin` database on the same Flexible Server — never a plaintext
+  value. This is what makes `MinInstances = 2` safe: every replica shares one
+  store, so there is no data loss on restart and no user projection split
+  across replicas.
+- `keycloakDbPassword`, `webClientSecret` and the database connection string
+  are all stored as Key Vault secrets or Container App secrets; the Container
+  Apps read them via `Configuration.Secrets` (`KeyVaultUrl`/`Value` + the
+  shared managed identity where applicable) and reference them from
   containers with `SecretRef` — never as literal env values.
 
 **Database connectivity tradeoff:** the Flexible Server firewall rule uses the
 documented `0.0.0.0`/`0.0.0.0` sentinel, which means "allow other Azure
 services", not "allow the whole internet". A private endpoint (VNet
 integration) is the hardening step over this, left out here because it needs
-its own infrastructure subnet.
+its own infrastructure subnet. The `web` app's connection string authenticates
+as the server administrator (`kcadmin`) — the same account reserved for
+Keycloak — because ARM cannot provision a scoped PostgreSQL role for Flexible
+Server; this is a documented deferral, not an oversight, until a dedicated
+least-privilege role exists (see the comment at the connection-string
+construction in `AzureCloudProvider.cs`).
+
+There is no Storage Account: an earlier revision provisioned one for
+"persistent storage" but never attached it to anything, so it was removed.
 
 DNS zone + custom-domain/TLS binding is left as a marked extension point
 because it depends on your verified domain — this is the one piece the stack

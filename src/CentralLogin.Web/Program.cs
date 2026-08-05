@@ -48,7 +48,7 @@ builder.Services.AddRazorPages(razor =>
 
 var app = builder.Build();
 
-// Apply migrations / ensure the SQLite database exists.
+// Apply migrations / ensure the configured database exists (SQLite or PostgreSQL).
 await app.Services.InitializeDatabaseAsync();
 
 // --- HTTP pipeline ------------------------------------------------------------

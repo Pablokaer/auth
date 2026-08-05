@@ -3,8 +3,9 @@
 Centralized authentication platform. A Keycloak realm provides OpenID Connect
 identity for one or more ASP.NET Core applications and APIs. The first client is
 an ASP.NET Core **Razor Pages** web application. Application-specific data lives
-in **SQLite**; identity, credentials and tokens live in **Keycloak** — never in
-the application database.
+in **SQLite locally, PostgreSQL in deployed environments**; identity,
+credentials and tokens live in **Keycloak** — never in the application
+database.
 
 Built with **.NET 10**, **.NET Aspire 13** (local orchestration), **Entity
 Framework Core 10**, **Cake Frosting** (build/deploy pipeline), **Pulumi (C#)**
@@ -30,7 +31,7 @@ Framework Core 10**, **Cake Frosting** (build/deploy pipeline), **Pulumi (C#)**
 12. [Cake build pipeline](#cake-build-pipeline)
 13. [Pulumi infrastructure](#pulumi-infrastructure)
 14. [CI](#ci) · [Deployment](#deployment)
-15. [Why SQLite](#why-sqlite)
+15. [Why SQLite locally, PostgreSQL in production](#why-sqlite-locally-postgresql-in-production)
 16. [Security](#security)
 17. [Troubleshooting](#troubleshooting)
 
@@ -43,6 +44,7 @@ Framework Core 10**, **Cake Frosting** (build/deploy pipeline), **Pulumi (C#)**
 | .NET SDK | `10.0.301` (LTS) — `global.json` |
 | .NET Aspire | `13.4.6` |
 | EF Core (SQLite) | `10.0.10` |
+| EF Core (PostgreSQL, Npgsql) | `10.0.3` |
 | Keycloak container | `quay.io/keycloak/keycloak:26.5.6` |
 | PostgreSQL (Keycloak) | `postgres:17.6` |
 | Cake.Frosting | `6.2.0` |
@@ -60,7 +62,8 @@ CentralLogin/
     CentralLogin.Web/              # Razor Pages: cookie + OIDC auth, policies, security
     CentralLogin.Domain/           # Entities, value objects, domain rules (no infra)
     CentralLogin.Application/      # Use cases, interfaces, commands, validation, authz rules
-    CentralLogin.Infrastructure/   # EF Core + SQLite, repositories, migrations
+    CentralLogin.Infrastructure/   # EF Core, repositories, DatabaseOptions, SQLite migrations
+    CentralLogin.Infrastructure.Postgres/ # PostgreSQL migration set only (separate migrations assembly)
   tests/
     CentralLogin.UnitTests/        # Provisioning + domain rules
     CentralLogin.IntegrationTests/ # SQLite/EF + authorization + optional E2E
@@ -76,10 +79,14 @@ CentralLogin/
 Layer responsibilities: **Domain** is pure .NET (no ASP.NET/EF/Keycloak/Aspire/
 Cake/Pulumi — enforced by architecture tests). **Application** holds use cases,
 interfaces, commands/queries, validation and application authorization rules,
-depending only on Domain. **Infrastructure** owns EF Core, SQLite, repositories
-and migrations. **Web** owns Razor Pages, authentication/authorization, security
-headers and DI. **AppHost** orchestrates Web + Keycloak + PostgreSQL for local
-dev. **ServiceDefaults** centralizes telemetry/health/resilience/discovery.
+depending only on Domain. **Infrastructure** owns EF Core, the SQLite and
+PostgreSQL providers, repositories, `DatabaseOptions` and the SQLite migrations.
+**Infrastructure.Postgres** exists solely so the PostgreSQL migrations live in
+their own assembly (EF Core scans a whole assembly for migrations, and the two
+providers' migrations must never mix). **Web** owns Razor Pages,
+authentication/authorization, security headers and DI. **AppHost** orchestrates
+Web + Keycloak + PostgreSQL for local dev. **ServiceDefaults** centralizes
+telemetry/health/resilience/discovery.
 
 ## Prerequisites & installation
 
@@ -133,6 +140,15 @@ http / `RequireHttpsMetadata: false` outside Development aborts the host with a
 message naming the offending key. The app never starts half-configured, so a
 deployment mistake is caught by your rollout rather than by the first user to
 sign in.
+
+The `Database` section is validated the same way (`DatabaseOptionsValidator` +
+`ValidateOnStart`): `Database:Provider` selects `Sqlite` (default, requires
+`DataDirectory`/`FileName`) or `Postgres` (requires `ConnectionString`); the
+host aborts at startup rather than failing on the first query if the selected
+provider is missing what it needs. Never commit a real
+`Database:ConnectionString` — supply it via user-secrets locally or a Container
+App secret in deployed environments (see
+[Pulumi infrastructure](#pulumi-infrastructure)).
 
 ## Local execution
 
@@ -220,11 +236,14 @@ then served at **http://localhost:5080** (see [Ports](#ports)).
 | **PostgreSQL** (Keycloak DB) | `15432` → container `5432` | Used only by Keycloak; the app never connects to it. |
 | **Aspire dashboard** | dynamic (e.g. `https://localhost:5xxxx`) | Dev-only observability UI; only when running via the AppHost. |
 
-The application database is **SQLite** — a local file at
+The application database is **SQLite** locally — a local file at
 `src/CentralLogin.Web/data/centrallogin.db`, not a network port. It is generated
 automatically on first run (see [Database & migrations](#database--migrations))
 and is **not checked into git** — the database file and its WAL/SHM siblings are
-gitignored.
+gitignored. Deployed environments instead point the app at the PostgreSQL
+Flexible Server that Pulumi provisions (see
+[Pulumi infrastructure](#pulumi-infrastructure)) — never at a container-local
+file, since every replica must share the same store.
 
 ## Keycloak setup
 
@@ -345,22 +364,58 @@ needed. The architecture tests enforce the layering rules.
 
 ## Database & migrations
 
-SQLite lives in a configurable persistent directory (`Database:DataDirectory`,
-default `./data`), with WAL journaling, `synchronous=NORMAL`, a busy timeout and
-foreign keys enabled, and a unique index on `KeycloakSubject`. The directory and
-database file are created automatically — there is no `.db` file checked into
-git, and no manual setup step: the first `dotnet run` (or `aspire run`) creates
-`data/centrallogin.db` and applies all pending EF Core migrations at startup.
+`Database:Provider` selects the EF Core provider (`DatabaseOptionsValidator`
+enforces this is configured correctly — see
+[Configuration & secrets](#configuration--secrets)):
+
+- **`Sqlite`** (default, local development). Lives in a configurable
+  persistent directory (`Database:DataDirectory`, default `./data`), with WAL
+  journaling, `synchronous=NORMAL`, a busy timeout and foreign keys enabled,
+  and a unique index on `KeycloakSubject`. The directory and database file are
+  created automatically — there is no `.db` file checked into git, and no
+  manual setup step: the first `dotnet run` (or `aspire run`) creates
+  `data/centrallogin.db` and applies all pending EF Core migrations at
+  startup. SQLite allows only one writer at a time, so it is unsuitable for
+  more than one replica — see
+  [Why SQLite locally, PostgreSQL in production](#why-sqlite-locally-postgresql-in-production).
+- **`Postgres`** (deployed environments). Requires `Database:ConnectionString`
+  (never committed — a Container App secret in production, see
+  [Pulumi infrastructure](#pulumi-infrastructure)). Every replica applies
+  migrations against the same server at startup; EF Core 10 takes a migration
+  lock, so concurrent replicas serialize rather than race.
+
+The two providers keep **separate migration sets in separate assemblies**,
+because EF Core scans a whole assembly for migrations: SQLite's migrations
+stay in `CentralLogin.Infrastructure` (the default migrations assembly),
+PostgreSQL's live in `CentralLogin.Infrastructure.Postgres` (set explicitly via
+`MigrationsAssembly` in `DependencyInjection.cs`). There is only **one** shared
+model (`CentralLoginDbContext`), so **every** model change needs a migration
+added to **both** assemblies — adding one and forgetting the other lets
+PostgreSQL silently drift behind SQLite (or vice versa) until it fails at
+runtime. `CentralLoginDbContextPendingModelChangesTests` guards against this:
+it fails the build the moment either provider has a pending model change.
 
 ```zsh
-# Add a migration after changing the model:
+# SQLite:
 dotnet tool run dotnet-ef migrations add <Name> \
   --project src/CentralLogin.Infrastructure \
   --output-dir Persistence/Migrations
 
+# PostgreSQL:
+dotnet tool run dotnet-ef migrations add <Name> \
+  --project src/CentralLogin.Infrastructure.Postgres \
+  --output-dir Persistence/Migrations
+
 # Apply migrations manually (normally automatic at startup):
-dotnet tool run dotnet-ef database update --project src/CentralLogin.Infrastructure
+dotnet tool run dotnet-ef database update --project src/CentralLogin.Infrastructure           # SQLite
+dotnet tool run dotnet-ef database update --project src/CentralLogin.Infrastructure.Postgres   # PostgreSQL
 ```
+
+`CentralLoginPostgresDbContextFactory` targets a design-time placeholder
+connection string (no live database needed to add/scaffold a migration), so
+`dotnet-ef database update --project ...Infrastructure.Postgres` against a
+real server also needs an explicit `--connection "<your connection string>"`
+— otherwise it silently targets the placeholder.
 
 ## Data Protection key ring
 
@@ -442,11 +497,30 @@ through an isolated `IPulumiRunner` (CLI today, Automation API later).
 
 Provider-neutral scaffold with separate `dev`/`staging`/`prod` stacks. It
 prepares abstractions for application hosting, Keycloak hosting, PostgreSQL,
-persistent storage, container registry, DNS, TLS, secret management, logging,
-monitoring and backups. Sensitive config is marked secret; only non-sensitive
-outputs are exported. See `infrastructure/CentralLogin.Pulumi/README.md` for
+container registry, DNS, TLS, secret management, logging, monitoring and
+backups. Sensitive config is marked secret; only non-sensitive outputs are
+exported. See `infrastructure/CentralLogin.Pulumi/README.md` for
 `pulumi preview` / `up` / `refresh` / `destroy` and provider extension points.
 No resources are created until a provider is selected.
+
+On Azure, the `web` Container App is configured against a PostgreSQL Flexible
+Server provisioned for Keycloak — its own `centrallogin` database on that
+server, reached via a Container App secret — never a plaintext connection
+string, which is what makes `MinInstances = 2` in production safe: every
+replica shares one database instead of each maintaining its own
+container-local SQLite file. Keycloak's own database is not yet wired up (no
+`keycloak` database resource, no `KC_DB*` env vars on the Keycloak Container
+App) — the server exists for that purpose but only the application's database
+is provisioned today. The Storage Account that an earlier revision provisioned
+for "persistent storage" but never attached to anything has been removed.
+
+The web app authenticates to PostgreSQL as the server administrator
+(`kcadmin`) — the same account reserved for Keycloak — because ARM cannot
+provision a scoped role for Flexible Server. That is a documented trade-off,
+not an oversight: a dedicated least-privilege role for the `web` app is the
+follow-up, and until then its credentials can read/drop every database on the
+server (see the comment at the connection-string construction in
+`AzureCloudProvider.cs`).
 
 ## CI
 
@@ -464,23 +538,38 @@ Secrets (e.g. `PULUMI_ACCESS_TOKEN`, cloud credentials) come from environment
 secrets / OIDC federation. The job delegates to the Cake `CD` target, which runs
 `CI` first and passes `--confirm-production=true` only for production.
 
-## Why SQLite
+## Why SQLite locally, PostgreSQL in production
 
-SQLite stores only application-specific data (the local `ApplicationUser`
-projection keyed by the Keycloak subject). It is ideal for the initial
-single-instance deployment: zero-ops, file-based, transactional. **Replace it
-with PostgreSQL** when you need horizontal scaling (multiple app instances
-writing concurrently) or significant concurrent write load — SQLite allows only
-one writer at a time. The data layer sits behind repository interfaces in the
-Application layer, so the provider can be swapped in Infrastructure without
-touching domain or web code.
+The application database stores only application-specific data (the local
+`ApplicationUser` projection keyed by the Keycloak subject) — nothing here
+holds identity secrets. The data layer sits behind repository interfaces in
+the Application layer, so `Database:Provider` switches the concrete EF Core
+provider in Infrastructure without touching domain or web code (see
+[Database & migrations](#database--migrations)).
+
+**SQLite** (`Database:Provider=Sqlite`, the local-development default) is
+zero-ops, file-based and transactional — ideal for a single instance, and it
+is what every unit/integration test and the Aspire AppHost use. It allows only
+one writer at a time, and its WAL mode is not safe over a network file share
+(byte-range locking is not reliably forwarded over SMB), so it cannot be
+shared across replicas.
+
+**PostgreSQL** (`Database:Provider=Postgres`) is what deployed environments
+use instead, because the production plan runs the `web` Container App with
+`MinReplicas = 2`: every replica must share one writable store rather than
+each maintaining its own container-local SQLite file, and writes are not
+rare here — `UserProvisioningService.RecordLogin` persists on **every**
+successful sign-in, not just the first one. The Pulumi Azure provider points
+the app at a PostgreSQL Flexible Server provisioned for Keycloak (see
+[Pulumi infrastructure](#pulumi-infrastructure)).
 
 ## Security
 
 - **No secrets in source control.** Credentials, password hashes, refresh
-  tokens, client secrets and Keycloak-internal data are never stored in SQLite or
-  committed. Secrets flow via user-secrets / Aspire parameters (dev) and
-  environment/secret manager (staging/prod). `appsettings*.json` hold no secrets.
+  tokens, client secrets and Keycloak-internal data are never stored in the
+  application database (SQLite or PostgreSQL) or committed. Secrets flow via
+  user-secrets / Aspire parameters (dev) and environment/secret manager
+  (staging/prod). `appsettings*.json` hold no secrets.
 - **Token handling.** Standard ASP.NET Core OIDC middleware validates issuer,
   audience, lifetime and signing keys, and handles state/nonce/PKCE. We never
   parse or validate JWT signatures manually. Tokens, authorization codes, cookies
@@ -501,18 +590,27 @@ touching domain or web code.
   Cake `VulnerabilityCheck` task).
 - **Keycloak admin console** must not be exposed publicly without restrictions;
   production uses exact redirect URIs and HTTPS.
+- **Database credential scope (known deferral).** On Azure the `web` app
+  connects to PostgreSQL as the Flexible Server administrator (`kcadmin`) —
+  the same account reserved for Keycloak — because ARM has no way to create a
+  scoped PostgreSQL role for Flexible Server. Its credentials can therefore
+  read/drop every database on the server. This is a documented trade-off, not
+  an oversight; a dedicated least-privilege role for the `web` app is the
+  follow-up (see [Pulumi infrastructure](#pulumi-infrastructure)).
 - **No production admins are created at app startup.** The `dev-admin` user
   exists only in the development realm import, without a committed password.
 - **Secret rotation.** Rotate the client secret in the Keycloak admin console
   (Clients → central-login-web → Credentials → Regenerate) or via `kcadm.sh`, then
   update `Keycloak:ClientSecret` in the app's secret store. Rotate on a schedule
   and after any suspected exposure. See `keycloak/README.md`.
-- **Backup & restore.** SQLite: back up the database file and its `-wal`/`-shm`
-  siblings (or use `sqlite3 .backup`) from the persistent data directory; restore
-  by replacing the files while the app is stopped. Keycloak (PostgreSQL): use
-  managed PostgreSQL backups / `pg_dump`; the Pulumi `BackupPlan` prepares
-  retention settings per environment. Owning team: whoever operates the
-  deployment is responsible for scheduling and testing restores.
+- **Backup & restore.** Local SQLite: back up the database file and its
+  `-wal`/`-shm` siblings (or use `sqlite3 .backup`) from the persistent data
+  directory; restore by replacing the files while the app is stopped. Deployed
+  PostgreSQL (the application's `centrallogin` database, on the Flexible
+  Server provisioned for Keycloak): use managed PostgreSQL backups / `pg_dump`;
+  the Pulumi `BackupPlan` prepares retention settings per environment. Owning
+  team: whoever operates the deployment is responsible for scheduling and
+  testing restores.
 
 ## Troubleshooting
 

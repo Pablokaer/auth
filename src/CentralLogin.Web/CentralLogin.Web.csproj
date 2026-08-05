@@ -20,6 +20,10 @@
   <ItemGroup>
     <ProjectReference Include="..\CentralLogin.Application\CentralLogin.Application.csproj" />
     <ProjectReference Include="..\CentralLogin.Infrastructure\CentralLogin.Infrastructure.csproj" />
+    <!-- Referenced (not used directly) so the Postgres migrations assembly is
+         present in the published output and loadable by name at runtime when
+         Database:Provider is Postgres. -->
+    <ProjectReference Include="..\CentralLogin.Infrastructure.Postgres\CentralLogin.Infrastructure.Postgres.csproj" />
     <ProjectReference Include="..\CentralLogin.ServiceDefaults\CentralLogin.ServiceDefaults.csproj" />
   </ItemGroup>
 
