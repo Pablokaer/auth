@@ -39,9 +39,14 @@ builder.Services.AddRateLimiter(rateLimiter =>
 });
 
 // --- Razor Pages with page-level authorization -------------------------------
+// Authorization is deny-by-default (see the fallback policy in
+// AddApplicationAuthorization): any page without authorization metadata now
+// requires an authenticated user, so a newly added page is unreachable until
+// someone decides otherwise. Public pages must opt out with [AllowAnonymous].
 builder.Services.AddRazorPages(razor =>
 {
-    // Home ("/Index") is public. The following pages require authentication:
+    // Home ("/Index") is public via [AllowAnonymous]. The following pages
+    // require the listed policy on top of the fallback's authentication check:
     razor.Conventions.AuthorizePage("/Dashboard", AuthorizationPolicies.RequireUser);
     razor.Conventions.AuthorizePage("/Admin", AuthorizationPolicies.RequireAdministrator);
 });
@@ -76,6 +81,11 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapRazorPages();
+
+// The fallback authorization policy is also evaluated for requests that match
+// no endpoint, so unmatched paths would otherwise challenge anonymous users
+// instead of 404-ing. Keep them plain 404s for everyone.
+app.MapFallback("/{**path}", () => Results.NotFound()).AllowAnonymous();
 
 // Aspire dev endpoints (health/aliveness), development-only by default.
 app.MapDefaultEndpoints();
