@@ -13,6 +13,12 @@ public sealed class StackConfiguration
     public required string CloudProvider { get; init; }
     public string? Domain { get; init; }
 
+    // Public portal URLs the Web app redirects authenticated accounts to.
+    // Account-specific, never invented here — see ResourcePlan.PortalsPlan for
+    // the one place a documented default is derived from Domain when unset.
+    public string? AdminPortalUrl { get; init; }
+    public string? EmployeePortalUrl { get; init; }
+
     // --- Secrets (marked as secret; never exported) ------------------------
     public Output<string>? KeycloakDbPassword { get; init; }
     public Output<string>? WebClientSecret { get; init; }
@@ -26,6 +32,8 @@ public sealed class StackConfiguration
             Environment = DeploymentEnvironmentParser.FromStackName(Deployment.Instance.StackName),
             CloudProvider = config.Get("cloudProvider") ?? "none",
             Domain = config.Get("domain"),
+            AdminPortalUrl = config.Get("adminPortalUrl"),
+            EmployeePortalUrl = config.Get("employeePortalUrl"),
             KeycloakDbPassword = config.GetSecret("keycloakDbPassword"),
             WebClientSecret = config.GetSecret("webClientSecret"),
         };
