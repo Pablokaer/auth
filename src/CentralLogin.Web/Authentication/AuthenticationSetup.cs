@@ -144,15 +144,37 @@ public static class AuthenticationSetup
             // employee -> Employee (5001), everyone else stays on central (5080).
             OnTicketReceived = RouteToHomePortal,
 
-            // Never surface raw error details (which may include codes) to the
-            // browser or logs; redirect to a generic error page.
-            OnRemoteFailure = context =>
-            {
-                context.Response.Redirect("/Error?source=auth");
-                context.HandleResponse();
-                return Task.CompletedTask;
-            },
+            // Never surface raw error details (which may include codes) to
+            // the browser; redirect to a generic error page. The failure is
+            // still logged server-side - see HandleRemoteFailure.
+            OnRemoteFailure = HandleRemoteFailure,
         };
+    }
+
+    /// <summary>
+    /// Records the reason a remote OIDC exchange failed (exception type and
+    /// message - which, for a provider-reported failure, already folds in
+    /// the OIDC <c>error</c>/<c>error_description</c>) before redirecting to
+    /// the generic error page. A named method rather than an inline lambda
+    /// so a test can invoke it directly with a constructed
+    /// <see cref="RemoteFailureContext"/>.
+    /// </summary>
+    public static Task HandleRemoteFailure(RemoteFailureContext context)
+    {
+        // Redirect + HandleResponse() first and unconditionally: the original
+        // lambda could not throw, so a throwing logger provider must not turn
+        // a handled remote failure into an unhandled 500 - which, on a
+        // Development host, would surface the provider's error detail via the
+        // exception page instead of the generic one.
+        context.Response.Redirect("/Error?source=auth");
+        context.HandleResponse();
+
+        context.HttpContext.RequestServices
+            .GetRequiredService<ILoggerFactory>()
+            .CreateLogger(typeof(AuthenticationSetup).FullName!)
+            .LogWarning(context.Failure, "OIDC remote authentication failed.");
+
+        return Task.CompletedTask;
     }
 
     private static async Task ProvisionLocalUserAsync(TokenValidatedContext context)

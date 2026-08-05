@@ -9,7 +9,7 @@ namespace CentralLogin.UnitTests.Fakes;
 /// </summary>
 public sealed class CapturingLogger<T> : ILogger<T>
 {
-    public List<(LogLevel Level, string Message)> Entries { get; } = new();
+    public List<(LogLevel Level, string Message, Exception? Exception)> Entries { get; } = new();
 
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -21,5 +21,9 @@ public sealed class CapturingLogger<T> : ILogger<T>
         TState state,
         Exception? exception,
         Func<TState, Exception?, string> formatter)
-        => Entries.Add((logLevel, formatter(state, exception)));
+        // The built-in formatter passed by LogWarning(ex, "message") ignores
+        // exception and returns only the message text, so it is recorded
+        // separately here - otherwise a test asserting on Entries could not
+        // see the exception (and therefore the failure reason) at all.
+        => Entries.Add((logLevel, formatter(state, exception), exception));
 }

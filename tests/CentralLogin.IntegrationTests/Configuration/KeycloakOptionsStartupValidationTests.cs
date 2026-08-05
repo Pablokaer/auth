@@ -123,6 +123,16 @@ public sealed class KeycloakOptionsStartupValidationTests
         Assert.Equal(OpenIdConnectResponseType.Code, oidc.ResponseType);
         Assert.False(oidc.MapInboundClaims);
         Assert.Contains("roles", oidc.Scope);
+
+        // OnRemoteFailure must actually be wired up - without this, deleting
+        // it from ConfigureOpenIdConnect would leave every other check above
+        // (and AuthenticationSetupTests, which calls the handler directly)
+        // still green.
+        // A null check would not do: RemoteAuthenticationEvents pre-initializes
+        // OnRemoteFailure to a no-op, so it is never null.
+        Assert.Equal(
+            nameof(AuthenticationSetup.HandleRemoteFailure),
+            oidc.Events.OnRemoteFailure.Method.Name);
     }
 
     private static IEnumerable<string> AssertStartupRejected(WebApplicationFactory<Program> factory)
