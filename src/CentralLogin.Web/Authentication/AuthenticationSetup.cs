@@ -18,17 +18,28 @@ public static class AuthenticationSetup
     /// the Authorization Code flow with PKCE. State/nonce validation, issuer,
     /// audience, lifetime and signing-key validation are all performed by the
     /// standard ASP.NET Core handler.
+    ///
+    /// Both configuration sections it reads are validated at startup
+    /// (<c>ValidateOnStart</c>), so a misconfigured deployment fails while the
+    /// host is starting instead of at a user's first sign-in.
     /// </summary>
     public static IServiceCollection AddKeycloakAuthentication(
         this IServiceCollection services,
         IConfiguration configuration,
         IHostEnvironment environment)
     {
-        var options = configuration
-            .GetSection(KeycloakAuthenticationOptions.SectionName)
-            .Get<KeycloakAuthenticationOptions>() ?? new KeycloakAuthenticationOptions();
-
-        services.AddSingleton(options);
+        // Bound through the options system (rather than a one-shot Get<T>() with
+        // an `?? new()` fallback, which happily accepted a missing section) so
+        // KeycloakAuthenticationOptionsValidator + ValidateOnStart abort startup
+        // on a deployment that never overrode the appsettings placeholders. The
+        // plain singleton is resolved from IOptions<T>.Value, so consumers such
+        // as KeycloakRolesClaimsTransformation cannot obtain an unvalidated
+        // instance from DI.
+        services.AddOptions<KeycloakAuthenticationOptions>()
+            .Bind(configuration.GetSection(KeycloakAuthenticationOptions.SectionName))
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<KeycloakAuthenticationOptions>, KeycloakAuthenticationOptionsValidator>();
+        services.AddSingleton(sp => sp.GetRequiredService<IOptions<KeycloakAuthenticationOptions>>().Value);
 
         var isDevelopment = environment.IsDevelopment();
 
@@ -76,64 +87,72 @@ public static class AuthenticationSetup
             cookie.LogoutPath = "/Account/Logout";
             cookie.AccessDeniedPath = "/Account/AccessDenied";
         })
-        .AddOpenIdConnect(oidc =>
-        {
-            oidc.Authority = options.Authority;
-            oidc.ClientId = options.ClientId;
-            oidc.ClientSecret = options.ClientSecret;
-            oidc.RequireHttpsMetadata = options.RequireHttpsMetadata;
+        .AddOpenIdConnect();
 
-            // Authorization Code flow + PKCE (confidential client).
-            oidc.ResponseType = OpenIdConnectResponseType.Code;
-            oidc.UsePkce = true;
-            oidc.ResponseMode = OpenIdConnectResponseMode.Query;
-
-            oidc.SaveTokens = true;                        // enables id_token_hint on logout
-            oidc.GetClaimsFromUserInfoEndpoint = true;
-            oidc.MapInboundClaims = false;                 // keep original claim names (sub, realm_access, ...)
-
-            oidc.CallbackPath = options.CallbackPath;
-            oidc.SignedOutCallbackPath = options.SignedOutCallbackPath;
-
-            oidc.Scope.Clear();
-            oidc.Scope.Add(OpenIdConnectScope.OpenId);
-            oidc.Scope.Add("profile");
-            oidc.Scope.Add("email");
-            oidc.Scope.Add("roles");
-
-            // Explicit, defence-in-depth validation (these are also defaults).
-            oidc.TokenValidationParameters = new TokenValidationParameters
-            {
-                NameClaimType = "preferred_username",
-                RoleClaimType = ClaimTypes.Role,
-                ValidateIssuer = true,
-                ValidateAudience = true,
-                ValidateLifetime = true,
-                ValidateIssuerSigningKey = true,
-                ClockSkew = TimeSpan.FromMinutes(2),
-            };
-
-            oidc.Events = new OpenIdConnectEvents
-            {
-                // Provision/update the local user right after the token is validated.
-                OnTokenValidated = ProvisionLocalUserAsync,
-
-                // Home each account to its portal: administrator -> Admin (5100),
-                // employee -> Employee (5001), everyone else stays on central (5080).
-                OnTicketReceived = RouteToHomePortal,
-
-                // Never surface raw error details (which may include codes) to the
-                // browser or logs; redirect to a generic error page.
-                OnRemoteFailure = context =>
-                {
-                    context.Response.Redirect("/Error?source=auth");
-                    context.HandleResponse();
-                    return Task.CompletedTask;
-                },
-            };
-        });
+        // Configured from the validated KeycloakAuthenticationOptions instead of
+        // a value captured here, so the handler can only ever see settings that
+        // passed KeycloakAuthenticationOptionsValidator.
+        services.AddOptions<OpenIdConnectOptions>(OpenIdConnectDefaults.AuthenticationScheme)
+            .Configure<KeycloakAuthenticationOptions>(ConfigureOpenIdConnect);
 
         return services;
+    }
+
+    private static void ConfigureOpenIdConnect(OpenIdConnectOptions oidc, KeycloakAuthenticationOptions options)
+    {
+        oidc.Authority = options.Authority;
+        oidc.ClientId = options.ClientId;
+        oidc.ClientSecret = options.ClientSecret;
+        oidc.RequireHttpsMetadata = options.RequireHttpsMetadata;
+
+        // Authorization Code flow + PKCE (confidential client).
+        oidc.ResponseType = OpenIdConnectResponseType.Code;
+        oidc.UsePkce = true;
+        oidc.ResponseMode = OpenIdConnectResponseMode.Query;
+
+        oidc.SaveTokens = true;                        // enables id_token_hint on logout
+        oidc.GetClaimsFromUserInfoEndpoint = true;
+        oidc.MapInboundClaims = false;                 // keep original claim names (sub, realm_access, ...)
+
+        oidc.CallbackPath = options.CallbackPath;
+        oidc.SignedOutCallbackPath = options.SignedOutCallbackPath;
+
+        oidc.Scope.Clear();
+        oidc.Scope.Add(OpenIdConnectScope.OpenId);
+        oidc.Scope.Add("profile");
+        oidc.Scope.Add("email");
+        oidc.Scope.Add("roles");
+
+        // Explicit, defence-in-depth validation (these are also defaults).
+        oidc.TokenValidationParameters = new TokenValidationParameters
+        {
+            NameClaimType = "preferred_username",
+            RoleClaimType = ClaimTypes.Role,
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ClockSkew = TimeSpan.FromMinutes(2),
+        };
+
+        oidc.Events = new OpenIdConnectEvents
+        {
+            // Provision/update the local user right after the token is validated.
+            OnTokenValidated = ProvisionLocalUserAsync,
+
+            // Home each account to its portal: administrator -> Admin (5100),
+            // employee -> Employee (5001), everyone else stays on central (5080).
+            OnTicketReceived = RouteToHomePortal,
+
+            // Never surface raw error details (which may include codes) to the
+            // browser or logs; redirect to a generic error page.
+            OnRemoteFailure = context =>
+            {
+                context.Response.Redirect("/Error?source=auth");
+                context.HandleResponse();
+                return Task.CompletedTask;
+            },
+        };
     }
 
     private static async Task ProvisionLocalUserAsync(TokenValidatedContext context)
