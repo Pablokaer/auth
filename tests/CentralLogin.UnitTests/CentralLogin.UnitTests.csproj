@@ -18,6 +18,7 @@
     <ProjectReference Include="..\..\src\CentralLogin.Application\CentralLogin.Application.csproj" />
     <ProjectReference Include="..\..\src\CentralLogin.Infrastructure\CentralLogin.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\CentralLogin.Web\CentralLogin.Web.csproj" />
+    <ProjectReference Include="..\..\infrastructure\CentralLogin.Pulumi\CentralLogin.Pulumi.csproj" />
   </ItemGroup>
 
 </Project>
