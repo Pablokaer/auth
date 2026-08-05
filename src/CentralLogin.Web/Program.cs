@@ -15,6 +15,11 @@ builder.AddServiceDefaults();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
+// --- Data Protection: stable app name + a durable key ring outside Development,
+// so the auth cookie (and its saved tokens) survive a restart/redeploy/second
+// instance instead of being silently invalidated ----------------------------
+builder.Services.AddPersistedDataProtection(builder.Configuration);
+
 // --- Authentication & authorization ------------------------------------------
 builder.Services.AddKeycloakAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddApplicationAuthorization();
