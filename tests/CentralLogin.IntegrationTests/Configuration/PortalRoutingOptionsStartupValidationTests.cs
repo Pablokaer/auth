@@ -31,32 +31,8 @@ public sealed class PortalRoutingOptionsStartupValidationTests
 
         var thrown = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
 
-        var validationException = UnwrapOptionsValidationException(thrown);
+        var validationException = StartupValidationFailure.Unwrap(thrown);
         Assert.NotNull(validationException);
         Assert.Contains(validationException!.Failures, f => f.Contains("AdminUrl", StringComparison.Ordinal));
-    }
-
-    /// <summary>
-    /// Today the host lets <see cref="OptionsValidationException"/> surface
-    /// directly from <c>StartupValidator</c>, so this finds it on the first
-    /// iteration. The walk exists so the test keeps working if a future host
-    /// version wraps startup failures instead; <see cref="AggregateException"/>
-    /// is flattened because its validation exception need not be first.
-    /// </summary>
-    private static OptionsValidationException? UnwrapOptionsValidationException(Exception exception)
-    {
-        switch (exception)
-        {
-            case OptionsValidationException validationException:
-                return validationException;
-            case AggregateException aggregate:
-                return aggregate.Flatten().InnerExceptions
-                    .Select(UnwrapOptionsValidationException)
-                    .FirstOrDefault(found => found is not null);
-            default:
-                return exception.InnerException is null
-                    ? null
-                    : UnwrapOptionsValidationException(exception.InnerException);
-        }
     }
 }

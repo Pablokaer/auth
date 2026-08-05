@@ -125,6 +125,14 @@ Non-secret settings live in `src/CentralLogin.Web/appsettings*.json`
 (`Keycloak:Authority`, `Keycloak:ClientId`, `Database:*`). In staging/production
 supply secrets via environment variables or your cloud secret manager.
 
+The `Keycloak` section is validated at **startup** (`ValidateOnStart`): a missing
+`Authority`/`ClientSecret`/`ClientId`, an `Authority` still set to the
+`REPLACE_WITH_KEYCLOAK_HOST` placeholder shipped in `appsettings.json`, or plain
+http / `RequireHttpsMetadata: false` outside Development aborts the host with a
+message naming the offending key. The app never starts half-configured, so a
+deployment mistake is caught by your rollout rather than by the first user to
+sign in.
+
 ## Local execution
 
 > **TL;DR — day-to-day run.** Once the Keycloak + PostgreSQL containers exist and
