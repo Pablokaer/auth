@@ -26,12 +26,13 @@ Framework Core 10**, **Cake Frosting** (build/deploy pipeline), **Pulumi (C#)**
 8. [Test accounts (local development)](#test-accounts-local-development)
 9. [Testing](#testing)
 10. [Database & migrations](#database--migrations)
-11. [Cake build pipeline](#cake-build-pipeline)
-12. [Pulumi infrastructure](#pulumi-infrastructure)
-13. [CI](#ci) · [Deployment](#deployment)
-14. [Why SQLite](#why-sqlite)
-15. [Security](#security)
-16. [Troubleshooting](#troubleshooting)
+11. [Data Protection key ring](#data-protection-key-ring)
+12. [Cake build pipeline](#cake-build-pipeline)
+13. [Pulumi infrastructure](#pulumi-infrastructure)
+14. [CI](#ci) · [Deployment](#deployment)
+15. [Why SQLite](#why-sqlite)
+16. [Security](#security)
+17. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -361,6 +362,62 @@ dotnet tool run dotnet-ef migrations add <Name> \
 dotnet tool run dotnet-ef database update --project src/CentralLogin.Infrastructure
 ```
 
+## Data Protection key ring
+
+The auth cookie (and, via `SaveTokens = true`, the OIDC tokens saved inside it)
+is encrypted with the ASP.NET Core Data Protection key ring. Bound from the
+`DataProtection` section (`DataProtectionKeyRingOptions`, validated at startup):
+
+```json
+"DataProtection": {
+  "ApplicationName": "CentralLogin",
+  "KeyRingPath": "/mnt/centrallogin-keys"
+}
+```
+
+- **`ApplicationName`** is embedded in every protected payload and must stay the
+  same across every deployment/instance — changing it invalidates every
+  existing cookie even if the key ring itself is preserved. Defaults to
+  `CentralLogin`; only override it if you must (e.g. running two differently
+  named instances that must NOT share cookies).
+- **`KeyRingPath`** persists the key ring to that directory
+  (`PersistKeysToFileSystem`). Without it, ASP.NET Core's default is to persist
+  the key ring **per-user** under the OS profile directory
+  (`%LOCALAPPDATA%\ASP.NET\DataProtection-Keys`, DPAPI-encrypted, on Windows;
+  `~/.aspnet/DataProtection-Keys`, unencrypted, on Linux/macOS) — that default
+  is fine for a developer's own machine, but neither outcome in a container is:
+  with no profile directory the framework silently falls back to **ephemeral,
+  in-memory keys**, and where `HOME`/`LOCALAPPDATA` *is* set it persists into
+  the container's **writable layer** — either way the keys are regenerated on
+  the next start or redeploy, exactly the failure this option exists to
+  prevent. **Required outside Development** — startup fails loudly if it is
+  unset or not an absolute path, naming the offending
+  key — because without it every restart, redeploy or second instance
+  regenerates the keys and silently signs every user out. It must point at a
+  **durable, shared volume** mounted into every instance (e.g. a Kubernetes
+  `PersistentVolumeClaim` with `ReadWriteMany`, an NFS/EFS mount, or an Azure
+  File Share) — a container-local or per-instance path defeats the point, and
+  a relative path would resolve against the working directory (the writable
+  image layer), which is why it must be absolute. Left unset in Development,
+  where the framework's per-user default is fine. Set it via
+  `DataProtection__KeyRingPath` (environment variable) if you would rather not
+  add it to `appsettings.json`, same as `Keycloak:ClientSecret`.
+- The key ring directory holds unencrypted key material once populated on
+  Linux/macOS (on Windows with a user profile the files are still
+  DPAPI-encrypted). The app creates it owner-only (`0700`) on Linux/macOS so
+  no other local user/container on the same host can read it (a no-op if the
+  volume already exists with its own permissions); Windows relies on the
+  mounted volume's own ACLs. Treat it like any other secret store: prefer an
+  already-encrypted-at-rest volume, and for stronger at-rest protection
+  `IDataProtectionBuilder` also supports `ProtectKeysWithCertificate(...)` if
+  the hosting platform provides a suitable certificate/KMS.
+- **Verifying persistence survives a restart**: `dotnet test` covers this
+  (`DataProtectionKeyRingPersistenceTests` — two independently composed hosts
+  pointed at the same `KeyRingPath` decrypt each other's payload, proving a
+  restart does not lose the key ring). To check by hand: start the app with a
+  `KeyRingPath` set, sign in, stop the app, start it again, and confirm the
+  existing session cookie is still valid rather than redirecting to sign-in.
+
 ## Cake build pipeline
 
 Strongly-typed C# tasks in `build/CentralLogin.Build`:
@@ -430,6 +487,10 @@ touching domain or web code.
   and secrets are never logged (the provisioning log emits only a subject hash).
 - **Cookies.** HttpOnly, `SameSite=Lax`, Secure outside development (`__Host-`
   prefix in non-dev). HTTPS + HSTS enforced outside development.
+- **Data Protection key ring.** Persisted to a durable, shared volume outside
+  Development with a stable application name — see [Data Protection key
+  ring](#data-protection-key-ring) — so restarts, redeploys and additional
+  instances do not silently invalidate every session cookie.
 - **CSRF.** Razor Pages antiforgery protects state-changing (POST) requests,
   including logout.
 - **Headers & CSP.** `SecurityHeadersMiddleware` sets a Razor-appropriate CSP
