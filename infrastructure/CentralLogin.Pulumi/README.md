@@ -17,6 +17,13 @@ pulumi stack init staging
 pulumi stack init prod
 ```
 
+The stack name selects the environment tier (instance counts, Postgres HA, backups,
+alerting). Only `dev`/`development`, `staging` and `prod`/`production` are accepted,
+case-insensitively — any other name **fails the deployment** instead of falling back to
+the development tier, so a stack cannot end up production-named yet dev-tier. Adding a
+name means adding it to `KnownStackNames` in
+[`DeploymentEnvironment.cs`](Configuration/DeploymentEnvironment.cs).
+
 ## Configuration and secrets
 
 Non-secret config lives in `Pulumi.<stack>.yaml`. **Sensitive values must be set

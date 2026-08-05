@@ -58,7 +58,7 @@
   </ItemGroup>
 
   <ItemGroup Label="Infrastructure as Code (Pulumi)">
-    <PackageVersion Include="Pulumi" Version="3.98.0" />
+    <PackageVersion Include="Pulumi" Version="3.107.3" />
     <PackageVersion Include="Pulumi.AzureNative" Version="3.23.0" />
   </ItemGroup>
 
