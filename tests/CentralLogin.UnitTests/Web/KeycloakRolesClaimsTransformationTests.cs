@@ -1,5 +1,7 @@
 using System.Security.Claims;
+using CentralLogin.UnitTests.Fakes;
 using CentralLogin.Web.Authentication;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace CentralLogin.UnitTests.Web;
@@ -146,5 +148,67 @@ public sealed class KeycloakRolesClaimsTransformationTests
         var result = await transformation.TransformAsync(principal);
 
         Assert.Single(RoleClaims(result), c => c.Value == "administrator");
+    }
+
+    [Fact]
+    public async Task Malformed_realm_access_logs_a_warning_naming_the_claim()
+    {
+        var logger = new CapturingLogger<KeycloakRolesClaimsTransformation>();
+        var transformation = new KeycloakRolesClaimsTransformation(Options, logger);
+        // "invalid JSON literal" (not "invalid start of a property name") so
+        // System.Text.Json's JsonException.Message embeds the raw tail —
+        // "tSECRETVALUE}" — verbatim. This is what makes the
+        // DoesNotContain(SECRETVALUE) assertion below load-bearing: with a
+        // structurally-broken payload like "{not-json" the exception message
+        // never contains the sentinel, so the assertion would pass even if
+        // the exception were mistakenly attached to the log entry.
+        var principal = AuthenticatedPrincipal(("realm_access", "{\"roles\":tSECRETVALUE}"));
+
+        var result = await transformation.TransformAsync(principal);
+
+        // Fail-open: still succeeds with whatever roles could be parsed (none).
+        Assert.Empty(RoleClaims(result));
+
+        Assert.Contains(
+            logger.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("realm_access"));
+
+        // AC-2: neither the rendered message nor the (deliberately not passed)
+        // exception may carry the raw claim content. CapturingLogger records
+        // the exception separately from the formatted message specifically so
+        // this assertion is load-bearing — the default ILogger formatter would
+        // ignore the exception, so asserting on the message alone would pass
+        // even if the whole raw claim were attached to the log entry.
+        Assert.DoesNotContain(
+            logger.Entries,
+            e => e.Message.Contains("SECRETVALUE")
+                || (e.Exception?.Message.Contains("SECRETVALUE") ?? false));
+    }
+
+    [Fact]
+    public async Task Malformed_resource_access_logs_a_warning_naming_the_claim()
+    {
+        var logger = new CapturingLogger<KeycloakRolesClaimsTransformation>();
+        var transformation = new KeycloakRolesClaimsTransformation(Options, logger);
+        // Nested the way resource_access actually shapes client roles (see
+        // Malformed_realm_access_logs_a_warning_naming_the_claim above for
+        // why the "invalid JSON literal" shape — rather than a structurally
+        // broken payload — is required for the sentinel assertion to be
+        // load-bearing).
+        var principal = AuthenticatedPrincipal(
+            ("resource_access", "{\"central-login-web\":{\"roles\":tSECRETVALUE}}"));
+
+        var result = await transformation.TransformAsync(principal);
+
+        Assert.Empty(RoleClaims(result));
+
+        Assert.Contains(
+            logger.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("resource_access"));
+
+        Assert.DoesNotContain(
+            logger.Entries,
+            e => e.Message.Contains("SECRETVALUE")
+                || (e.Exception?.Message.Contains("SECRETVALUE") ?? false));
     }
 }

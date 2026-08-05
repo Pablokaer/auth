@@ -58,7 +58,7 @@ public sealed class PortalRouter
     /// </summary>
     public string? ResolveHomePortalUrl(ClaimsPrincipal principal)
     {
-        var roles = ReadRealmRoles(principal);
+        var roles = ReadRealmRoles(principal, _logger);
 
         if (roles.Contains(ApplicationRoles.Administrator))
         {
@@ -124,7 +124,7 @@ public sealed class PortalRouter
             ? "http is not permitted outside Development; https is required"
             : "not an absolute http/https URL";
 
-    private static HashSet<string> ReadRealmRoles(ClaimsPrincipal principal)
+    private static HashSet<string> ReadRealmRoles(ClaimsPrincipal principal, ILogger logger)
     {
         var result = new HashSet<string>(StringComparer.Ordinal);
 
@@ -150,11 +150,33 @@ public sealed class PortalRouter
                 }
             }
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
             // Malformed claim — treat as no realm roles rather than fail sign-in.
+            LogMalformedRealmAccessClaim(logger, realmAccess.Length, ex);
         }
 
         return result;
     }
+
+    /// <summary>
+    /// Logs a warning that the <c>realm_access</c> claim failed to parse as
+    /// JSON, without the raw claim value or any token material: only the
+    /// claim value's length and the exception's parse position
+    /// (<see cref="JsonException.LineNumber"/> / <see cref="JsonException.BytePositionInLine"/>)
+    /// — enough to distinguish a truncated claim from mid-value corruption.
+    /// The <see cref="JsonException"/> itself is deliberately not passed to
+    /// the logger: <see cref="JsonException.Message"/> embeds the unparsed
+    /// input tail verbatim and unbounded, which would leak claim content (and
+    /// could inject forged log lines via control characters) into the log.
+    /// </summary>
+    private static void LogMalformedRealmAccessClaim(ILogger logger, int claimValueLength, JsonException ex) =>
+        logger.LogWarning(
+            "Failed to parse Keycloak '{ClaimType}' claim as JSON; treating as no realm roles for portal routing. " +
+            "ValueLength={ValueLength} Line={Line} BytePositionInLine={BytePositionInLine} ExceptionType={ExceptionType}",
+            RealmAccessClaim,
+            claimValueLength,
+            ex.LineNumber,
+            ex.BytePositionInLine,
+            ex.GetType().Name);
 }
