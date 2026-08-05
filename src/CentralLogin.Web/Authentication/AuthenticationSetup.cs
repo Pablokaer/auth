@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
 
@@ -27,16 +28,32 @@ public static class AuthenticationSetup
             .GetSection(KeycloakAuthenticationOptions.SectionName)
             .Get<KeycloakAuthenticationOptions>() ?? new KeycloakAuthenticationOptions();
 
-        var portalOptions = configuration
-            .GetSection(PortalRoutingOptions.SectionName)
-            .Get<PortalRoutingOptions>() ?? new PortalRoutingOptions();
-
         services.AddSingleton(options);
-        services.AddSingleton(portalOptions);
-        services.AddSingleton<PortalRouter>();
-        services.AddTransient<IClaimsTransformation, KeycloakRolesClaimsTransformation>();
 
         var isDevelopment = environment.IsDevelopment();
+
+        // Bind PortalRoutingOptions through the options system (rather than a
+        // one-shot Get<T>()) so IValidateOptions + ValidateOnStart can fail
+        // fast at startup on a misconfigured portal URL (see
+        // PortalRoutingOptionsValidator / PortalUrlPolicy). PortalRouter still
+        // takes a plain PortalRoutingOptions singleton — resolved from
+        // IOptions<PortalRoutingOptions>.Value below — so that registration,
+        // and therefore validation, is what actually runs at startup.
+        services.AddOptions<PortalRoutingOptions>()
+            .Bind(configuration.GetSection(PortalRoutingOptions.SectionName))
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<PortalRoutingOptions>, PortalRoutingOptionsValidator>();
+        services.AddSingleton(sp => sp.GetRequiredService<IOptions<PortalRoutingOptions>>().Value);
+
+        // requireHttps mirrors the validator: https is required outside
+        // Development, so an already-invalid-in-Development-only URL never
+        // becomes a redirect target once promoted to a non-dev environment.
+        services.AddSingleton(sp => new PortalRouter(
+            sp.GetRequiredService<PortalRoutingOptions>(),
+            sp.GetRequiredService<ILogger<PortalRouter>>(),
+            requireHttps: !isDevelopment));
+
+        services.AddTransient<IClaimsTransformation, KeycloakRolesClaimsTransformation>();
 
         services.AddAuthentication(auth =>
         {
