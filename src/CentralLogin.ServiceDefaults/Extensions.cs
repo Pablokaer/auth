@@ -98,20 +98,26 @@ public static class Extensions
     /// Maps health-check endpoints. By default these are exposed ONLY in the
     /// Development environment because they can leak internal state. Enable in
     /// other environments deliberately and behind network/authorization
-    /// controls if required.
+    /// controls if required. The mapped endpoints carry an explicit
+    /// <c>AllowAnonymous</c>, so a host's deny-by-default fallback
+    /// authorization policy (if any) never blocks them — any restriction on
+    /// exposure outside Development must therefore be enforced at the network
+    /// layer, not by relying on authorization.
     /// </summary>
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
         if (app.Environment.IsDevelopment())
         {
-            // All health checks must pass for readiness.
-            app.MapHealthChecks(HealthEndpointPath);
+            // All health checks must pass for readiness. AllowAnonymous is required
+            // here because hosts using a deny-by-default fallback authorization
+            // policy would otherwise 401 the probes.
+            app.MapHealthChecks(HealthEndpointPath).AllowAnonymous();
 
             // Only "live"-tagged checks for liveness.
             app.MapHealthChecks(AlivenessEndpointPath, new()
             {
                 Predicate = registration => registration.Tags.Contains("live"),
-            });
+            }).AllowAnonymous();
         }
 
         return app;

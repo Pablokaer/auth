@@ -360,7 +360,13 @@ Unit tests cover local user provisioning and domain rules. Integration tests
 cover SQLite/EF Core (real migrated database) and authorization for
 authenticated users, unauthenticated users, administrators and users without the
 required role — using a **test authentication handler** so no live Keycloak is
-needed. The architecture tests enforce the layering rules.
+needed. They also cover the deny-by-default fallback authorization policy
+(see [Security](#security)): that every discovered Razor Page declares
+authorization intent, that an attribute-less endpoint is rejected, and that
+requests matching no endpoint at all get a plain anonymous 404 rather than an
+authentication challenge (including a real static file still being served,
+and an unmatched path with a file extension such as `/favicon.ico`). The
+architecture tests enforce the layering rules.
 
 ## Database & migrations
 
@@ -582,6 +588,17 @@ the app at a PostgreSQL Flexible Server provisioned for Keycloak (see
   instances do not silently invalidate every session cookie.
 - **CSRF.** Razor Pages antiforgery protects state-changing (POST) requests,
   including logout.
+- **Deny-by-default authorization.** The fallback authorization policy
+  (`AddApplicationAuthorization`) requires an authenticated user on any
+  endpoint that carries no authorization metadata of its own, so a newly
+  added page is unreachable until someone deliberately opts it out with
+  `[AllowAnonymous]` — nothing is implicitly public.
+  `EndpointAuthorizationCoverageTests` fails the build the moment a page has
+  neither an authorization requirement nor that opt-out. The fallback policy
+  is also evaluated for requests that match no endpoint at all; `Program.cs`
+  maps an explicit, anonymous catch-all so unmatched paths (a typo'd URL, a
+  missing static asset, `/favicon.ico`) still 404 for everyone instead of
+  triggering an OIDC challenge.
 - **Headers & CSP.** `SecurityHeadersMiddleware` sets a Razor-appropriate CSP
   (no inline/eval scripts), `X-Content-Type-Options`, `X-Frame-Options: DENY`,
   `Referrer-Policy`, `Cross-Origin-Opener-Policy` and `Permissions-Policy`.
