@@ -58,6 +58,8 @@ production) replicas — unlike a container-local SQLite file.
 
 ## Azure (selected provider)
 
+`AzureCloudProvider` (`Providers/Azure/`) is implemented with
+`Pulumi.AzureNative` `3.23.0` and provisions: a resource group, Log Analytics
 (logging + monitoring), Azure Container Registry, Key Vault (secret
 management, RBAC), a user-assigned managed identity, a PostgreSQL Flexible
 Server hosting both the `keycloak` database and the application's own
