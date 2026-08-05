@@ -1,0 +1,37 @@
+# Line-ending normalization.
+#
+# .editorconfig declares `end_of_line = lf` for `[*]`, but without this file
+# that is only a formatting preference: on Windows, Git's default
+# core.autocrlf=true checks every text file out as CRLF. `dotnet format
+# CentralLogin.sln --verify-no-changes` (the Cake `FormatCheck` target) then
+# fails with thousands of ENDOFLINE errors on a pristine clone, before a
+# single line of contributor code is involved.
+#
+# Baseline: let Git detect text vs binary, normalize to LF in the repository,
+# and check text files out as LF on every platform. `eol=lf` on the baseline
+# is deliberate -- `* text=auto` alone would leave the checkout at the mercy
+# of each developer's core.autocrlf. This mirrors `.editorconfig`'s `[*]`
+# scope, so file types added later (.razor, .ts, ...) are covered by default.
+* text=auto eol=lf
+
+# Windows-only scripts, which their tooling expects as CRLF. None are
+# currently committed; the rules are here so that adding one does the right
+# thing. `*.ps1` is deliberately NOT listed: dotnet-install.ps1 is already
+# committed as LF, PowerShell reads LF fine, and pinning it to CRLF would
+# introduce a diff for no benefit.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Known binary types: never subject them to text detection or EOL rewriting.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.dll binary
+*.exe binary
+*.snk binary
+*.woff binary
+*.woff2 binary
