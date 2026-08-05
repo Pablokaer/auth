@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Holds only the PostgreSQL migration set for CentralLoginDbContext.
+    EF Core scans a whole assembly for migrations, so the SQLite migrations
+    (CentralLogin.Infrastructure/Persistence/Migrations) and the PostgreSQL
+    migrations here must live in separate assemblies rather than mix.
+  -->
+  <PropertyGroup>
+    <RootNamespace>CentralLogin.Infrastructure.Postgres</RootNamespace>
+    <AssemblyName>CentralLogin.Infrastructure.Postgres</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CentralLogin.Infrastructure\CentralLogin.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>

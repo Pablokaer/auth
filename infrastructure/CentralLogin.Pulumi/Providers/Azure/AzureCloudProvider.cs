@@ -10,14 +10,18 @@ namespace CentralLogin.Pulumi.Providers.Azure;
 ///
 /// Maps the provider-neutral <see cref="ResourcePlan"/> onto Azure resources:
 ///   Resource Group, Log Analytics (logging + monitoring), Azure Container
-///   Registry, Storage Account (persistent storage), Key Vault (secret
-///   management, RBAC), a user-assigned managed identity (lets the Container
-///   Apps read Key Vault secrets without a chicken-and-egg on principal ids),
-///   PostgreSQL Flexible Server (Keycloak database + backups) with the
-///   `keycloak` database and an "allow Azure services" firewall rule, and a
-///   Container Apps environment hosting the Web app and Keycloak — both wired
-///   with the environment/secret configuration they read at runtime. A DNS
-///   zone + custom domain/TLS binding is left as a marked extension point.
+///   Registry, Key Vault (secret management, RBAC), a user-assigned managed
+///   identity (lets the Container Apps read Key Vault secrets without a
+///   chicken-and-egg on principal ids), PostgreSQL Flexible Server (Keycloak
+///   database + backups) with the `keycloak` database and an "allow Azure
+///   services" firewall rule, and a Container Apps environment hosting the
+///   Web app and Keycloak — both wired with the environment/secret
+///   configuration they read at runtime. The application's own `centrallogin`
+///   database lives on that same PostgreSQL Flexible Server, so the "web" app
+///   has no container-local file and no attached share — the Storage Account
+///   an earlier revision provisioned for "persistent storage" but never
+///   attached to anything has been removed. A DNS zone + custom domain/TLS
+///   binding is left as a marked extension point.
 ///
 /// Account-specific values (Azure location, tenant id, custom domain) are read
 /// from stack config — never invented here. Secrets come from secret config,
@@ -93,21 +97,6 @@ public sealed class AzureCloudProvider : ICloudProvider
                     Name = AzureNative.ContainerRegistry.SkuName.Basic,
                 },
                 AdminUserEnabled = false,
-            });
-
-        // --- Persistent storage ----------------------------------------------
-        var storage = new AzureNative.Storage.StorageAccount($"{prefix}store",
-            new AzureNative.Storage.StorageAccountArgs
-            {
-                ResourceGroupName = resourceGroup.Name,
-                Location = location,
-                Sku = new AzureNative.Storage.Inputs.SkuArgs
-                {
-                    Name = AzureNative.Storage.SkuName.Standard_LRS,
-                },
-                Kind = AzureNative.Storage.Kind.StorageV2,
-                AllowBlobPublicAccess = false,
-                MinimumTlsVersion = AzureNative.Storage.MinimumTlsVersion.TLS1_2,
             });
 
         // --- Secret management: Key Vault (RBAC, no access policies) ----------
@@ -213,7 +202,7 @@ public sealed class AzureCloudProvider : ICloudProvider
                 },
                 Storage = new AzureNative.DBforPostgreSQL.Inputs.StorageArgs
                 {
-                    StorageSizeGB = plan.PersistentStorage.SizeGigabytes,
+                    StorageSizeGB = plan.KeycloakDatabase.StorageSizeGigabytes,
                 },
                 Backup = new AzureNative.DBforPostgreSQL.Inputs.BackupArgs
                 {
@@ -228,6 +217,17 @@ public sealed class AzureCloudProvider : ICloudProvider
                 ResourceGroupName = resourceGroup.Name,
                 ServerName = postgres.Name,
                 DatabaseName = KeycloakDatabaseName,
+            });
+
+        // The application's own database on the Flexible Server provisioned
+        // above — this is what replaces the container-local SQLite file so
+        // every "web" replica shares one store.
+        var applicationDatabase = new AzureNative.DBforPostgreSQL.Database($"{prefix}-app-db",
+            new AzureNative.DBforPostgreSQL.DatabaseArgs
+            {
+                ResourceGroupName = resourceGroup.Name,
+                ServerName = postgres.Name,
+                DatabaseName = "centrallogin",
             });
 
         // Connectivity tradeoff: a VNet/private endpoint would need its own
@@ -248,6 +248,24 @@ public sealed class AzureCloudProvider : ICloudProvider
         // Flexible Server requires TLS; Keycloak's JDBC URL must ask for it.
         var keycloakDbUrl = Output.Format(
             $"jdbc:postgresql://{postgres.FullyQualifiedDomainName}:5432/{KeycloakDatabaseName}?sslmode=require");
+
+        // Built from the server FQDN + the application database name + the
+        // existing administrator login, wrapped as a secret so it is never
+        // logged/diffed in plaintext and never reaches InfrastructureOutputs.
+        //
+        // KNOWN TRADE-OFF: this reuses the server administrator ("kcadmin"),
+        // so the web app's credentials can read/drop every database on this
+        // server, including Keycloak's. ARM has no way to create a scoped
+        // PostgreSQL role for Flexible Server, so this is a documented
+        // deferral rather than an oversight - a dedicated least-privilege
+        // role for the "web" app is the follow-up.
+        //
+        // "SSL Mode=Require" encrypts the connection but does not validate the
+        // server certificate (no protection against a MITM presenting any
+        // certificate); "VerifyFull" is the hardening follow-up once the
+        // server's certificate/CA is available to pin against.
+        var applicationDbConnectionString = Output.CreateSecret(Output.Format(
+            $"Host={postgres.FullyQualifiedDomainName};Database={applicationDatabase.Name};Username=kcadmin;Password={keycloakDbPassword};SSL Mode=Require"));
 
         // --- Container Apps environment (hosts Web + Keycloak) ----------------
         var sharedKeys = AzureNative.OperationalInsights.GetSharedKeys.Invoke(
@@ -358,11 +376,15 @@ public sealed class AzureCloudProvider : ICloudProvider
 
         var keycloakUrl = keycloak.Configuration.Apply(c => $"https://{c!.Ingress?.Fqdn}");
 
+        const string databaseConnectionStringSecretName = "database-connection-string";
+
         var webEnv = new List<AzureNative.App.Inputs.EnvironmentVarArgs>
         {
             new() { Name = "Keycloak__Authority", Value = Output.Format($"{keycloakUrl}/realms/{KeycloakRealm}") },
             new() { Name = "Keycloak__ClientId", Value = KeycloakClientId },
             new() { Name = "Keycloak__ClientSecret", SecretRef = "web-client-secret" },
+            new() { Name = "Database__Provider", Value = "Postgres" },
+            new() { Name = "Database__ConnectionString", SecretRef = databaseConnectionStringSecretName },
         };
 
         // Portal URLs are never invented for the operator (see ResourcePlan);
@@ -392,6 +414,10 @@ public sealed class AzureCloudProvider : ICloudProvider
                         TargetPort = 8080,
                         Transport = AzureNative.App.IngressTransportMethod.Auto,
                     },
+                    // The connection string is a secret reference, never a
+                    // plaintext env var Value - Container Apps stores/encrypts
+                    // it separately and only the SecretRef below is visible on
+                    // the revision spec.
                     Secrets =
                     {
                         new AzureNative.App.Inputs.SecretArgs
@@ -399,6 +425,11 @@ public sealed class AzureCloudProvider : ICloudProvider
                             Name = "web-client-secret",
                             KeyVaultUrl = webClientSecretSecret.Properties.Apply(p => p.SecretUri),
                             Identity = appIdentity.Id,
+                        },
+                        new AzureNative.App.Inputs.SecretArgs
+                        {
+                            Name = databaseConnectionStringSecretName,
+                            Value = applicationDbConnectionString,
                         },
                     },
                 },
@@ -421,6 +452,12 @@ public sealed class AzureCloudProvider : ICloudProvider
                     },
                     Scale = new AzureNative.App.Inputs.ScaleArgs
                     {
+                        // MinReplicas = 2 in production is safe here: every
+                        // replica talks to the same PostgreSQL Flexible Server
+                        // (see applicationDbConnectionString above) instead of
+                        // maintaining its own container-local SQLite file, so
+                        // there is no split-brain user projection and nothing
+                        // is lost when a replica restarts.
                         MinReplicas = plan.ApplicationHosting.MinInstances,
                         MaxReplicas = plan.ApplicationHosting.MaxInstances,
                     },
@@ -428,8 +465,13 @@ public sealed class AzureCloudProvider : ICloudProvider
             },
             new CustomResourceOptions
             {
-                // Must be able to read the client secret from Key Vault.
-                DependsOn = { keyVaultSecretsUserAssignment },
+                // Must be able to read the client secret from Key Vault, and
+                // Pulumi would otherwise create the firewall rule and the
+                // application database concurrently with this Container App:
+                // on a first `up` the web app can start, fail MigrateAsync
+                // against an unreachable/nonexistent server and crash-loop the
+                // initial revision.
+                DependsOn = { keyVaultSecretsUserAssignment, keycloakDbFirewallRule, applicationDatabase },
             });
 
         // --- DNS + TLS (account-specific extension point) ---------------------
@@ -442,15 +484,22 @@ public sealed class AzureCloudProvider : ICloudProvider
         // --- Non-sensitive outputs only --------------------------------------
         return new InfrastructureOutputs
         {
-            ApplicationUrl = web.Configuration.Apply(c =>
+            // web.Configuration carries the database connection string as a
+            // secret entry Value, and Pulumi copies input secretness onto
+            // same-named outputs, so
+            // web.Configuration.Apply(...) would export a "[secret]" URL even
+            // though the FQDN itself is not sensitive. Output.Unsecret strips
+            // that inherited secretness back off before it becomes a stack output.
+            ApplicationUrl = Output.Unsecret(web.Configuration).Apply(c =>
                 $"https://{c!.Ingress?.Fqdn}"),
             KeycloakUrl = keycloakUrl,
             Notes = $"Azure environment '{plan.Environment}'. Registry, Key Vault, PostgreSQL "
-                    + "(with the keycloak database and an Azure-services firewall rule) and both "
-                    + "Container Apps (wired to the database and Key Vault secrets) are "
-                    + "provisioned. Left to complete: push the web image to ACR, and bind a "
-                    + "custom domain + managed TLS certificate (a private endpoint for "
-                    + "PostgreSQL is a further hardening step over the current firewall rule).",
+                    + "(with the keycloak and centrallogin databases and an Azure-services "
+                    + "firewall rule) and both Container Apps (wired to the database and Key "
+                    + "Vault secrets) are provisioned. Left to complete: push the web image to "
+                    + "ACR, and bind a custom domain + managed TLS certificate (a private "
+                    + "endpoint for PostgreSQL is a further hardening step over the current "
+                    + "firewall rule).",
         };
     }
 }

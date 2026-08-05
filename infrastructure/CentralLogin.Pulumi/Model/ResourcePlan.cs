@@ -13,7 +13,6 @@ public sealed record ResourcePlan(
     ApplicationHostingPlan ApplicationHosting,
     KeycloakHostingPlan KeycloakHosting,
     PostgresPlan KeycloakDatabase,
-    PersistentStoragePlan PersistentStorage,
     ContainerRegistryPlan ContainerRegistry,
     DnsPlan Dns,
     TlsPlan Tls,
@@ -46,9 +45,10 @@ public sealed record ResourcePlan(
                 AdminConsolePubliclyExposed: false),
             KeycloakDatabase: new PostgresPlan(
                 Image: "postgres:17.6",
-                HighAvailability: isProduction),
-            PersistentStorage: new PersistentStoragePlan(
-                SizeGigabytes: isProduction ? 50 : 10),
+                HighAvailability: isProduction,
+                // Azure Database for PostgreSQL Flexible Server only accepts
+                // storage sizes from a fixed set whose minimum is 32 GiB.
+                StorageSizeGigabytes: isProduction ? 128 : 32),
             ContainerRegistry: new ContainerRegistryPlan(
                 Repository: "centrallogin-web"),
             Dns: new DnsPlan(
@@ -72,8 +72,7 @@ public sealed record ResourcePlan(
 
 public sealed record ApplicationHostingPlan(int MinInstances, int MaxInstances, string? PublicHostname);
 public sealed record KeycloakHostingPlan(string Image, string StartCommand, bool AdminConsolePubliclyExposed);
-public sealed record PostgresPlan(string Image, bool HighAvailability);
-public sealed record PersistentStoragePlan(int SizeGigabytes);
+public sealed record PostgresPlan(string Image, bool HighAvailability, int StorageSizeGigabytes);
 public sealed record ContainerRegistryPlan(string Repository);
 public sealed record DnsPlan(string? Hostname);
 public sealed record TlsPlan(bool ManagedCertificate);
