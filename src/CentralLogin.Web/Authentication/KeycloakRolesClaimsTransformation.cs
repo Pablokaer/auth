@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace CentralLogin.Web.Authentication;
 
@@ -25,8 +27,24 @@ public sealed class KeycloakRolesClaimsTransformation : Microsoft.AspNetCore.Aut
     private const string RolesProperty = "roles";
 
     private readonly KeycloakAuthenticationOptions _options;
+    private readonly ILogger<KeycloakRolesClaimsTransformation> _logger;
 
-    public KeycloakRolesClaimsTransformation(KeycloakAuthenticationOptions options) => _options = options;
+    /// <param name="options">The Keycloak client configuration.</param>
+    /// <param name="logger">
+    /// Optional; defaults to <see cref="NullLogger{T}"/> so unit tests can
+    /// construct a <see cref="KeycloakRolesClaimsTransformation"/> directly
+    /// without a DI-provided logger. The existing
+    /// <c>AddTransient&lt;IClaimsTransformation, KeycloakRolesClaimsTransformation&gt;()</c>
+    /// registration still resolves a real <see cref="ILogger{TCategoryName}"/>
+    /// through DI in production.
+    /// </param>
+    public KeycloakRolesClaimsTransformation(
+        KeycloakAuthenticationOptions options,
+        ILogger<KeycloakRolesClaimsTransformation>? logger = null)
+    {
+        _options = options;
+        _logger = logger ?? NullLogger<KeycloakRolesClaimsTransformation>.Instance;
+    }
 
     public Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
     {
@@ -37,8 +55,8 @@ public sealed class KeycloakRolesClaimsTransformation : Microsoft.AspNetCore.Aut
 
         var discovered = new HashSet<string>(StringComparer.Ordinal);
 
-        CollectRealmRoles(principal, discovered);
-        CollectClientRoles(principal, discovered, _options.ClientId);
+        CollectRealmRoles(principal, discovered, _logger);
+        CollectClientRoles(principal, discovered, _options.ClientId, _logger);
 
         foreach (var role in discovered)
         {
@@ -51,7 +69,7 @@ public sealed class KeycloakRolesClaimsTransformation : Microsoft.AspNetCore.Aut
         return Task.FromResult(principal);
     }
 
-    private static void CollectRealmRoles(ClaimsPrincipal principal, HashSet<string> target)
+    private static void CollectRealmRoles(ClaimsPrincipal principal, HashSet<string> target, ILogger logger)
     {
         var realmAccess = principal.FindFirst(RealmAccessClaim)?.Value;
         if (string.IsNullOrWhiteSpace(realmAccess))
@@ -64,13 +82,14 @@ public sealed class KeycloakRolesClaimsTransformation : Microsoft.AspNetCore.Aut
             using var document = JsonDocument.Parse(realmAccess);
             AddRolesFromArray(document.RootElement, target);
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
             // Malformed claim — ignore rather than fail the request.
+            LogMalformedClaim(logger, RealmAccessClaim, realmAccess.Length, ex);
         }
     }
 
-    private static void CollectClientRoles(ClaimsPrincipal principal, HashSet<string> target, string clientId)
+    private static void CollectClientRoles(ClaimsPrincipal principal, HashSet<string> target, string clientId, ILogger logger)
     {
         var resourceAccess = principal.FindFirst(ResourceAccessClaim)?.Value;
         if (string.IsNullOrWhiteSpace(resourceAccess) || string.IsNullOrWhiteSpace(clientId))
@@ -86,11 +105,33 @@ public sealed class KeycloakRolesClaimsTransformation : Microsoft.AspNetCore.Aut
                 AddRolesFromArray(client, target);
             }
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
             // Malformed claim — ignore.
+            LogMalformedClaim(logger, ResourceAccessClaim, resourceAccess.Length, ex);
         }
     }
+
+    /// <summary>
+    /// Logs a warning naming the claim that failed to parse as JSON, without
+    /// the raw claim value or any token material: only the claim name, the
+    /// claim value's length, and the exception's parse position
+    /// (<see cref="JsonException.LineNumber"/> / <see cref="JsonException.BytePositionInLine"/>)
+    /// — enough to distinguish a truncated claim from mid-value corruption.
+    /// The <see cref="JsonException"/> itself is deliberately not passed to
+    /// the logger: <see cref="JsonException.Message"/> embeds the unparsed
+    /// input tail verbatim and unbounded, which would leak claim content (and
+    /// could inject forged log lines via control characters) into the log.
+    /// </summary>
+    private static void LogMalformedClaim(ILogger logger, string claimType, int claimValueLength, JsonException ex) =>
+        logger.LogWarning(
+            "Failed to parse Keycloak '{ClaimType}' claim as JSON; treating as no roles from this claim. " +
+            "ValueLength={ValueLength} Line={Line} BytePositionInLine={BytePositionInLine} ExceptionType={ExceptionType}",
+            claimType,
+            claimValueLength,
+            ex.LineNumber,
+            ex.BytePositionInLine,
+            ex.GetType().Name);
 
     private static void AddRolesFromArray(JsonElement container, HashSet<string> target)
     {

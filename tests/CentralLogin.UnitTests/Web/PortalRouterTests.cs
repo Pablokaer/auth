@@ -183,6 +183,40 @@ public sealed class PortalRouterTests
     }
 
     [Fact]
+    public void Malformed_realm_access_stays_on_central_and_logs_a_warning()
+    {
+        var logger = new CapturingLogger<PortalRouter>();
+        // "invalid JSON literal" shape (see the matching test in
+        // KeycloakRolesClaimsTransformationTests for why this — rather than a
+        // structurally broken payload like "{not-json" — is required for the
+        // sentinel assertion below to be load-bearing).
+        var identity = new ClaimsIdentity(
+            new[] { new Claim("realm_access", "{\"roles\":tSECRETVALUE}") },
+            authenticationType: "Test");
+        var principal = new ClaimsPrincipal(identity);
+        var router = new PortalRouter(Options, logger);
+
+        // Fail-open: a malformed claim still routes as "no realm roles"
+        // rather than failing sign-in.
+        var url = router.ResolveHomePortalUrl(principal);
+
+        Assert.Null(url);
+
+        Assert.Contains(
+            logger.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("realm_access"));
+
+        // AC-2: neither the rendered message nor the (deliberately not
+        // passed) exception may carry the raw claim content. See the
+        // matching assertion in KeycloakRolesClaimsTransformationTests for
+        // why CapturingLogger records the exception separately.
+        Assert.DoesNotContain(
+            logger.Entries,
+            e => e.Message.Contains("SECRETVALUE")
+                || (e.Exception?.Message.Contains("SECRETVALUE") ?? false));
+    }
+
+    [Fact]
     public void Backslash_separator_admin_url_does_not_survive_as_the_raw_string()
     {
         // "http:/\evil.com" is a classic backslash-as-separator trick:
