@@ -24,16 +24,17 @@ Framework Core 10**, **Cake Frosting** (build/deploy pipeline), **Pulumi (C#)**
 5. [Local execution](#local-execution)
 6. [Ports](#ports)
 7. [Keycloak setup](#keycloak-setup)
-8. [Test accounts (local development)](#test-accounts-local-development)
-9. [Testing](#testing)
-10. [Database & migrations](#database--migrations)
-11. [Data Protection key ring](#data-protection-key-ring)
-12. [Cake build pipeline](#cake-build-pipeline)
-13. [Pulumi infrastructure](#pulumi-infrastructure)
-14. [CI](#ci) · [Deployment](#deployment)
-15. [Why SQLite locally, PostgreSQL in production](#why-sqlite-locally-postgresql-in-production)
-16. [Security](#security)
-17. [Troubleshooting](#troubleshooting)
+8. [Portals](#portals)
+9. [Test accounts (local development)](#test-accounts-local-development)
+10. [Testing](#testing)
+11. [Database & migrations](#database--migrations)
+12. [Data Protection key ring](#data-protection-key-ring)
+13. [Cake build pipeline](#cake-build-pipeline)
+14. [Pulumi infrastructure](#pulumi-infrastructure)
+15. [CI](#ci) · [Deployment](#deployment)
+16. [Why SQLite locally, PostgreSQL in production](#why-sqlite-locally-postgresql-in-production)
+17. [Security](#security)
+18. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -286,6 +287,158 @@ mounted into the container at `/opt/keycloak/themes` (see the `-v` flag in
 edit `keycloak/themes/central-login/login/resources/css/custom.css`. Under
 `start-dev` theme caching is off, so a browser refresh shows edits immediately.
 
+## Portals
+
+CentralLogin is the **single sign-in entry point**; the portals are the separate
+applications an account actually works in. Sign-in always happens here, against
+the `central-login` Keycloak realm, and each account is then *homed* to exactly
+one portal chosen by its **realm role**.
+
+### How routing works
+
+1. The account signs in at CentralLogin.Web (or is redirected here by a portal
+   that requires authentication).
+2. On a successful ticket (`OnTicketReceived` in
+   `src/CentralLogin.Web/Authentication/AuthenticationSetup.cs`),
+   [`PortalRouter`](src/CentralLogin.Web/Authentication/PortalRouter.cs) reads
+   the realm roles straight from the validated `realm_access` claim and returns
+   the base URL of the matching portal.
+3. That URL replaces `context.ReturnUri`, so the browser lands on the portal,
+   which completes **its own** OIDC login silently over the shared Keycloak SSO
+   session — the user never types credentials twice.
+
+| Realm role | Configuration key | Local dev URL | Keycloak client |
+|---|---|---|---|
+| `administrator` | `Portals:AdminUrl` | http://localhost:5100 | `admin-portal` |
+| `employee` | `Portals:EmployeeUrl` | http://localhost:5001 | `employee-portal` |
+| `user` | `Portals:ClientUrl` | http://localhost:5090 | *(none shipped — see [Known gaps](#known-gaps))* |
+
+Rules that follow from the code, and that any change must respect:
+
+- **Highest privilege wins, and it short-circuits.** `administrator` beats
+  `employee` beats `user`. An account that is both administrator and employee
+  with an unset `AdminUrl` stays on the central app — it is never handed the
+  lower-privilege portal as a consolation destination.
+- **An unset portal URL is legal and means "stay on the central app."** That is
+  the intended way to switch a portal off; it is not a misconfiguration.
+- **A configured URL must be an absolute http/https URL, and https outside
+  Development** ([`PortalUrlPolicy`](src/CentralLogin.Web/Authentication/PortalUrlPolicy.cs)).
+  `PortalRoutingOptionsValidator` runs under `ValidateOnStart`, so a bad value
+  **aborts startup** instead of misrouting logins. A value that still fails the
+  policy at runtime is logged as a warning naming the portal, and the login
+  falls back to the local return URL.
+- **No matching role at all** → the account stays on the central app.
+
+Where the values come from, per environment:
+
+| Environment | Source |
+|---|---|
+| Local dev | the `Portals` section of `src/CentralLogin.Web/appsettings.Development.json` |
+| Deployed | `Portals__<Name>Url` environment variables. The AppHost forwards only non-empty values (`src/CentralLogin.AppHost/AppHost.cs`); Pulumi derives them from `central-login:domain` — or from explicit `central-login:adminPortalUrl` / `central-login:employeePortalUrl` config — and exports them. |
+| `appsettings.json` | placeholders (`https://REPLACE_WITH_..._HOST`) — a template, never a live value |
+
+### Adding a portal for an existing role
+
+This is the common case — a new application for administrators, employees or
+client users. **No application code changes are needed**: it is a Keycloak
+client plus one configuration value.
+
+1. **Register a confidential OIDC client** for the portal. For local dev add it
+   to `keycloak/realm/central-login-realm.json` alongside `admin-portal` (that
+   entry is the template); for a deployed realm create it in the admin console
+   or through your realm-management pipeline. Required shape:
+   - `publicClient: false`, `standardFlowEnabled: true`,
+     `implicitFlowEnabled: false`, `directAccessGrantsEnabled: false`
+   - `attributes["pkce.code.challenge.method"] = "S256"`
+   - `redirectUris`: the **exact** callback, `<portal-base-url>/signin-oidc`
+   - `webOrigins`: the portal's base URL
+   - `attributes["post.logout.redirect.uris"]`:
+     `<portal-base-url>/signout-callback-oidc` (`##`-separated if several)
+   - the **realm roles** protocol mapper (copy it from `admin-portal`) so the
+     portal also receives `realm_access.roles`
+2. **Set the client secret out of band.** Never commit it — a test scans
+   `keycloak/` and fails the build if a secret or password reappears. Locally,
+   follow the `keycloak/configure-dev.sh` pattern
+   (`kcadm.sh update clients/<uuid> -r central-login -s "secret=..."`, with the
+   value read from your environment).
+3. **Point the role's portal URL at it** — `Portals:AdminUrl`,
+   `Portals:EmployeeUrl` or `Portals:ClientUrl`:
+   `appsettings.Development.json` for local dev, `Portals__AdminUrl` (etc.) for
+   deployed environments, or
+   `pulumi config set central-login:adminPortalUrl https://…` for stacks Pulumi
+   drives.
+4. **Restart the web app** and sign in with an account holding that role (see
+   [Test accounts](#test-accounts-local-development)). Add the new port to the
+   [Ports](#ports) table if the portal runs locally.
+
+Replacing a portal is the same procedure: register the new client, repoint the
+URL, then retire the old client.
+
+### Adding a new kind of portal (a new role → a new destination)
+
+A portal for a role that does not exist yet is a code change, because the
+role → portal mapping is explicit by design. Work through all of it — a
+half-applied change either aborts startup or silently strands accounts:
+
+| # | File | Change |
+|---|---|---|
+| 1 | `src/CentralLogin.Application/Authorization/ApplicationRoles.cs` | add the role constant; the string must match the Keycloak realm role exactly |
+| 2 | `keycloak/realm/central-login-realm.json` | add the realm role under `roles.realm`, the portal client (previous section), and a password-less local test user holding the role |
+| 3 | `src/CentralLogin.Web/Authentication/PortalRoutingOptions.cs` | add the `<Name>Url` property |
+| 4 | `src/CentralLogin.Web/Authentication/PortalRouter.cs` | add the branch in `ResolveHomePortalUrl`, positioned deliberately in the privilege order |
+| 5 | `src/CentralLogin.Web/Authentication/PortalRoutingOptionsValidator.cs` | add the matching `ValidateUrl(...)` call |
+| 6 | `appsettings.json` / `appsettings.Development.json` | the placeholder value, and the local dev URL |
+| 7 | `src/CentralLogin.AppHost/AppHost.cs` | add the key to the portal-forwarding array so the value reaches deployed containers |
+| 8 | `infrastructure/CentralLogin.Pulumi/` | `StackConfiguration` (`config.Get("<name>PortalUrl")`), `PortalsPlan` + `ResourcePlan.FromConfiguration`, and the provider export / `InfrastructureOutputs` |
+| 9 | `tests/` | `PortalRouterTests`, `PortalRoutingOptionsValidatorTests`, `PortalRoutingOptionsStartupValidationTests` |
+| 10 | `README.md` | this section, [Ports](#ports), [Test accounts](#test-accounts-local-development) |
+
+If a portal should be reachable by *any* authenticated account rather than by
+one role, do **not** invent a role for it: leave routing alone and let the
+portal redirect to central login on its own. Portal routing decides only where
+an account *lands* after sign-in — it is not an access control mechanism.
+
+### Removing a portal
+
+**Switch it off (no code change, reversible).** Clear the role's portal URL —
+remove the key or set it to an empty string in `appsettings.Development.json`,
+drop the `Portals__<Name>Url` environment variable, or
+`pulumi config rm central-login:adminPortalUrl`. Accounts homed to that role
+now stay on the central app after sign-in. Optionally disable — rather than
+delete — the Keycloak client, which stops it accepting logins while keeping its
+configuration.
+
+**Remove it permanently.** In this order, so no in-flight login is bounced at a
+dead client:
+
+1. Clear the portal URL everywhere, as above, and roll that out first.
+2. Delete or disable the Keycloak client — in
+   `keycloak/realm/central-login-realm.json` for dev, and in each deployed
+   realm. The import file only runs on first creation of the realm, so it never
+   removes anything from a realm that already exists.
+3. Decide what happens to the accounts: reassign them to another role, or
+   accept that they now stay on the central app. A role with no portal behind it
+   is valid — just make sure it is deliberate.
+4. If that *kind* of portal is gone for good, reverse the table above — the
+   option property, the `PortalRouter` branch, the validator line, the
+   configuration keys, the AppHost entry, the Pulumi config/plan/export, the
+   tests and the docs. Removing the role constant is the last step, and only
+   once nothing in the realm or in the authorization policies references it.
+
+### Known gaps
+
+- **The client portal (`user` role) has no portal application in this
+  repository.** `appsettings.Development.json` sets
+  `Portals:ClientUrl=http://localhost:5090`, but the realm import ships no
+  client for it and nothing listens on that port — so a `user`-role account
+  signing in locally (`central.portal`, for example) is redirected to a URL that
+  will not answer. Either clear `Portals:ClientUrl` for local dev, or register
+  the client and run the portal before relying on it.
+- **Pulumi carries only the admin and employee URLs.** `PortalsPlan` has no
+  client-portal member, so `Portals__ClientUrl` is never derived from the
+  configured domain for deployed environments; supply it explicitly if that
+  portal exists.
+
 ## Test accounts (local development)
 
 > **Local development only.** By design the repository commits **no passwords**
@@ -299,7 +452,7 @@ edit `keycloak/themes/central-login/login/resources/css/custom.css`. Under
 |---|---|---|---|---|
 | **Keycloak admin** (master realm) | `admin` | `TroqueEstaSenha123!` | — | Admin console: http://localhost:8080/admin |
 | **App test user** (`central-login` realm) | `dev-admin` | `DevAdmin123!` | `user`, `administrator` | The web app: http://localhost:5080 |
-| **Central portal test user** | `central.portal` | `CentralPortal123!` | `user` | The web app: http://localhost:5080 |
+| **Central portal test user** | `central.portal` | `CentralPortal123!` | `user` | The web app: http://localhost:5080 — but while `Portals:ClientUrl` is set it is routed there after sign-in ([Portals](#portals)) |
 | **Employee portal test user** | `employee.central` | `EmployeeCentral123!` | `employee` | EmployeePortal: http://localhost:5001 |
 | **Admin portal test user** | `admin.portal` | `AdminPortal123!` | `administrator` | AdminPortal: http://localhost:5100 |
 
@@ -307,7 +460,9 @@ edit `keycloak/themes/central-login/login/resources/css/custom.css`. Under
 both the `user` and `administrator` realm roles, so it can reach the app's
 admin-only pages (`/Admin`). `central.portal`, `employee.central` and
 `admin.portal` are separate accounts matching the client each is meant to sign
-in to, so each portal can be exercised without borrowing `dev-admin`.
+in to, so each portal can be exercised without borrowing `dev-admin`. Which
+portal an account actually lands on after sign-in is decided by its realm role —
+see [Portals](#portals).
 
 > The three passwords above are new values chosen for this local-dev
 > convention — they intentionally **do not** reuse `Central123!`,
